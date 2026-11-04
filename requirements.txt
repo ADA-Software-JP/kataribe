@@ -1,0 +1,2 @@
+# 専用の窓(Windows は WebView2、macOS は WKWebView)に使う。無くてもソースからの起動はできる(ブラウザの窓に落ちる)
+pywebview

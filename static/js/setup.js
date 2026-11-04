@@ -1,0 +1,135 @@
+import { iconEl } from "./icons.js";
+import { t } from "./i18n.js";
+import { loginBlock, needsLogin } from "./login.js";
+import { $, S, api, emit, h, on, toast } from "./state.js";
+
+/* 最初の画面に用意のしかたを出す。speech.cpp(音声を作る)が見つからない時と、文章を書く LLM が使えない時。 */
+const INSTALL_DOC = "https://github.com/nyosegawa/speech.cpp/blob/main/docs/install.md";
+const INSTALL_CMD = {
+  windows: { shell: "pwsh", cmd: "irm https://raw.githubusercontent.com/nyosegawa/speech.cpp/main/install.ps1 | iex" },
+  mac: { shell: "terminal", cmd: "curl -fsSL https://raw.githubusercontent.com/nyosegawa/speech.cpp/main/install.sh | sh" },
+  linux: { shell: "terminal", cmd: "curl -fsSL https://raw.githubusercontent.com/nyosegawa/speech.cpp/main/install.sh | sh" },
+};
+const PULL_CMD = "speech pull irodori-tts-mf";
+
+const CHOICES = [
+  { id: "claude", name: "Claude Code",
+    url: "https://docs.anthropic.com/en/docs/claude-code/setup" },
+  { id: "codex", name: "Codex",
+    url: "https://github.com/openai/codex" },
+  { id: "lmstudio", name: "LM Studio",
+    url: "https://lmstudio.ai" },
+];
+
+let result = null;
+
+async function use(choice, btn) {
+  btn.disabled = true;
+  btn.replaceChildren(iconEl("loader-circle", "spin"), t("setup.checking"));
+  try {
+    S.config = await api("PUT", "/api/config", { llm_provider: choice.id });
+    emit("config-changed");
+    const r = await api("POST", "/api/llm/test", { provider: choice.id });
+    result = { id: choice.id, ok: r.ok, text: r.ok ? t("setup.works", { name: choice.name }) : r.detail };
+  } catch (e) {
+    result = { id: choice.id, ok: false, text: e.message };
+  }
+  render();
+}
+
+async function copy(text, btn) {
+  try { await navigator.clipboard.writeText(text); btn.textContent = t("ui.copied"); } catch { btn.textContent = t("ui.copy_manual"); }
+  setTimeout(() => { btn.textContent = t("ui.copy"); }, 2000);
+}
+
+const command = (text) => {
+  const btn = h("button", { class: "btn small", onclick: () => copy(text, btn) }, t("ui.copy"));
+  return h("div", { class: "cmd" }, h("code", {}, text), btn);
+};
+
+async function recheck(btn) {
+  btn.disabled = true;
+  try { await api("POST", "/api/engine/restart"); } catch (e) { toast(e.message, { kind: "err" }); }
+  btn.disabled = false;
+}
+
+/** 「セットアップ」: 足りない speech.cpp とモデルだけを入れる(入っているものは使う)。進み具合は SSE の setup で届く。 */
+async function autoInstall(btn) {
+  btn.disabled = true;
+  try { S.setup = await api("POST", "/api/setup/install", {}); } catch (e) { toast(e.message, { kind: "err" }); }
+  render();
+}
+
+function autoRow(lead) {
+  const st = S.setup || { state: "idle" };
+  const running = st.state === "running";
+  const btn = h("button", { class: "btn primary", onclick: () => autoInstall(btn) },
+    running ? [iconEl("loader-circle", "spin"), t("setup.auto_running")] : t(st.state === "error" ? "setup.auto_retry" : "setup.auto"));
+  btn.disabled = running;
+  const step = running && st.step ? t(`setup.auto_step_${st.step}`) + (st.percent != null ? ` ${st.percent}%` : "") : "";
+  return h("div", { class: "setup-row" },
+    h("div", { class: "setup-text" },
+      h("div", {}, lead),
+      step ? h("div", { class: "setup-step" }, step, st.line ? h("div", {}, st.line) : null) : null,
+      st.state === "error" ? h("div", { class: "test-result ng" }, st.error) : null),
+    btn);
+}
+
+/** speech.cpp かモデルが無い時のセットアップ。ボタン 1 つの自動と、README と同じ手で入れる方法。 */
+function speechCard() {
+  const how = { ...(INSTALL_CMD[S.platform] || INSTALL_CMD.windows) };
+  how.shell = t(`setup.cmd.${how.shell}`);
+  const noModel = S.engine.missing === "model";
+  const retry = h("button", { class: "btn small", onclick: () => recheck(retry) }, t("setup.retry"));
+  return h("div", { class: "setup" },
+    h("h2", {}, t(noModel ? "setup.model_title" : "setup.speech_title")),
+    autoRow(t(noModel ? "setup.model_lead" : "setup.speech_lead")),
+    h("details", { class: "setup-manual" },
+      h("summary", {}, t("setup.manual")),
+      noModel ? null : h("div", { class: "setup-row" },
+        h("div", { class: "setup-text" },
+          h("div", { class: "setup-name" }, t("setup.step1", { shell: how.shell })),
+          command(how.cmd),
+          h("div", { class: "setup-step" }, t("setup.step1_after", { shell: how.shell }), " ", h("a", { href: INSTALL_DOC, target: "_blank", rel: "noreferrer" }, t("setup.details"))))),
+      h("div", { class: "setup-row" },
+        h("div", { class: "setup-text" },
+          h("div", { class: "setup-name" }, t(noModel ? "setup.step_model" : "setup.step2")),
+          command(PULL_CMD))),
+      h("div", { class: "setup-row" },
+        h("div", { class: "setup-text" },
+          h("div", { class: "setup-step" }, t("setup.elsewhere"))),
+        h("button", { class: "btn small", onclick: () => emit("open-settings") }, t("ui.open_settings")),
+        retry)));
+}
+
+function render() {
+  const box = $("#welcome");
+  const speechMissing = S.engine.state === "error" && S.engine.missing;
+  if (!speechMissing && S.llm.ok && !(result && !result.ok)) { box.replaceChildren(); return; }
+  if (speechMissing) { box.replaceChildren(speechCard()); return; }
+  box.replaceChildren(h("div", { class: "setup" },
+    h("h2", {}, needsLogin() ? t("setup.login_title", { name: S.llm.auth.name }) : t("setup.llm_title")),
+    h("p", { class: "setup-lead" }, needsLogin()
+      ? t("setup.login_lead")
+      : t("setup.llm_lead")),
+    needsLogin() ? loginBlock() : null,
+    ...CHOICES.map((c) => {
+      const btn = h("button", { class: "btn small", onclick: () => use(c, btn) }, t("setup.use"));
+      const note = result?.id === c.id ? h("div", { class: `test-result ${result.ok ? "ok" : "ng"}` }, result.text) : null;
+      return h("div", { class: "setup-row" },
+        h("div", { class: "setup-text" },
+          h("div", { class: "setup-name" }, c.name, S.config.llm_provider === c.id ? h("span", { class: "setup-now" }, t("setup.selected")) : null),
+          h("div", { class: "setup-step" }, t(`setup.${c.id}`), " ", h("a", { href: c.url, target: "_blank", rel: "noreferrer" }, t("setup.steps"))),
+          note),
+        btn);
+    })));
+}
+
+export function initSetup() {
+  on("llm", () => { if (S.llm.ok && result && !result.ok) result = null; render(); });
+  on("config-changed", render);
+  on("lang", render);
+  on("engine", render);
+  on("setup", render);
+  render();
+}

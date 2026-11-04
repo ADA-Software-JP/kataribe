@@ -1,0 +1,2 @@
+# macOS で実行するシェルスクリプトは LF のまま保つ
+*.command text eol=lf

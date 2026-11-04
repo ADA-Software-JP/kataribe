@@ -1,0 +1,72 @@
+# Pushing a tag (v*), or running this by hand, builds the Windows and macOS (Apple Silicon) versions and attaches them to a Release.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to attach to (created on this commit if missing, e.g. v0.2.0)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            asset: Kataribe-windows.zip
+          - os: macos-latest
+            asset: Kataribe-macos.zip
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install pyinstaller pywebview
+      - run: python -m PyInstaller --noconfirm --clean Kataribe.spec
+      - name: zip (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Compress-Archive -Path dist/Kataribe -DestinationPath ${{ matrix.asset }}
+      - name: zip (macOS)
+        if: runner.os == 'macOS'
+        run: ditto -c -k --keepParent dist/Kataribe.app ${{ matrix.asset }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: ${{ matrix.asset }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+      - name: Attach to the Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+        run: |
+          # A tag that already exists must point at the commit just built, so the zips always match the tag's source
+          if out=$(gh api "repos/$GH_REPO/git/ref/tags/$TAG" 2>&1); then
+            sha=$(gh api "repos/$GH_REPO/commits/$TAG" --jq .sha)
+          elif echo "$out" | grep -q "Not Found"; then
+            sha=""
+          else
+            echo "Could not check tag $TAG: $out" >&2
+            exit 1
+          fi
+          if [ -n "$sha" ] && [ "$sha" != "$GITHUB_SHA" ]; then
+            echo "Tag $TAG points at $sha, but this run built $GITHUB_SHA. Run the workflow on that tag instead." >&2
+            exit 1
+          fi
+          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --target "$GITHUB_SHA" --title "Kataribe $TAG" --notes "Unsigned Windows and macOS (Apple Silicon) builds of Kataribe. First-run steps are in the README (README.md is Japanese, README.en.md is English)."
+          gh release upload "$TAG" Kataribe-windows.zip Kataribe-macos.zip --clobber

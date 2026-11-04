@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kataribe</title>
+<script>
+  (function () {
+    var get = function (k) { try { return localStorage.getItem("irodori." + k); } catch (e) { return null; } };
+    var root = document.documentElement.dataset;
+    var theme = get("theme");   // 未設定は「システム」(OS の明るさに合わせる)
+    if (theme !== "light" && theme !== "dark") theme = matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+    root.theme = theme;
+    root.color = get("color") || "mono";
+    root.subs = get("subs") || "large";
+  })();
+</script>
+<link rel="icon" href="/static/favicon-32.png" type="image/png" sizes="32x32">
+<link rel="apple-touch-icon" href="/static/favicon-180.png">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="app" id="app" data-phase="first">
+  <header class="top">
+    <button class="icon-btn" id="historyBtn" aria-expanded="false" data-i18n-title="hist.title" data-i18n-aria="hist.title" title="History" aria-label="History"><i data-i="panel-left"></i></button>
+    <div class="brand">Kataribe</div>
+    <div class="spacer"></div>
+    <button class="icon-btn" id="enginePill" data-state="stopped" data-i18n-aria="ui.status" aria-label="Status"><span class="dot"></span></button>
+    <button class="icon-btn" id="settingsBtn" data-i18n-title="ui.settings" data-i18n-aria="ui.settings" title="Settings" aria-label="Settings"><i data-i="settings"></i></button>
+  </header>
+
+  <main class="main" id="main">
+    <section class="welcome" id="welcome"></section>
+
+    <section class="now" id="now" aria-live="polite">
+      <div class="stagebox">
+        <div class="now-line" id="nowLine" lang="ja"></div>
+      </div>
+      <canvas id="wave" aria-hidden="true"></canvas>
+      <div class="other-tab hidden" id="otherTab">
+        <span class="other-title" data-i18n="ui.other_tab">Playing in another tab</span>
+        <button class="btn primary big" id="takeBtn" data-i18n="ui.take_tab">Listen in this tab</button>
+      </div>
+    </section>
+
+    <div class="dock" id="dock">
+      <div class="status-line" id="agentLine" role="status" data-lead="" data-empty="1">
+        <span class="lead"><i class="i lead-spin"></i><i class="i lead-warn"></i></span>
+        <button class="llm" id="agentBtn" data-i18n-title="ui.open_llm_settings" title="Open LLM settings"><span class="msg xf"></span></button>
+        <span class="acts" id="agentActs"></span>
+      </div>
+      <div class="controls" id="controls">
+        <button class="ctl" id="pauseBtn"><i class="i"></i></button>
+        <button class="ctl" id="restartBtn" data-i18n-title="ui.start_over" data-i18n-aria="ui.start_over" title="Start over" aria-label="Start over"><i data-i="rotate-ccw"></i></button>
+        <span class="ctl-sep" aria-hidden="true"></span>
+        <button class="voice-chip" id="voiceChip" aria-haspopup="true" aria-expanded="false" data-i18n-title="ui.change_voice" title="Change voice"><i data-i="speech"></i><span class="vname"></span><i data-i="chevron-down"></i></button>
+        <button class="ctl wide" id="saveBtn"><i class="i"></i><span class="ctl-label" data-i18n="ui.save_voice">Save voice</span></button>
+        <div class="voice-pick hidden" id="voicePick"></div>
+      </div>
+      <div class="rec hidden" id="rec">
+        <div class="rec-row">
+          <span class="rec-dot" aria-hidden="true"></span>
+          <span class="rec-title" data-i18n="r21.listening">Listening…</span>
+          <span class="rec-partial" id="recPartial"></span>
+          <button class="rec-btn" id="recCommit" data-i18n="r21.rec_confirm">Confirm</button>
+          <button class="rec-btn" id="recCancel" data-i18n="r21.rec_cancel">Cancel</button>
+        </div>
+        <div class="rec-hint" id="recHint"></div>
+      </div>
+      <div class="box">
+        <textarea id="input" rows="1" spellcheck="false" data-i18n-aria="ui.input" aria-label="Input" data-i18n-placeholder="ui.placeholder_first" placeholder=""></textarea>
+        <button class="mic" id="micBtn" data-i18n-title="ui.mic" data-i18n-aria="ui.mic" title="Voice input" aria-label="Voice input" aria-pressed="false"><i data-i="mic"></i></button>
+        <button class="send" id="sendBtn" data-i18n-title="ui.send_title" data-i18n-aria="ui.send" title="Send (Enter)" aria-label="Send"><i data-i="send"></i></button>
+      </div>
+      <div class="presets hidden" id="presets" role="group" data-i18n-aria="ui.examples" aria-label="Examples"></div>
+    </div>
+  </main>
+</div>
+
+<aside class="hist-panel hidden" id="historyPanel" data-i18n-aria="hist.title" aria-label="History">
+  <button class="hist-new" id="historyNew" type="button"><i data-i="square-pen"></i><span data-i18n="ui.start_over">Start over</span></button>
+  <div class="hist-list" id="historyList"></div>
+</aside>
+<aside class="drawer hidden" id="drawer" data-i18n-aria="ui.settings" aria-label="Settings"></aside>
+<div class="scrim hidden" id="scrim"></div>
+<dialog id="helpDlg"></dialog>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+<script type="module" src="/static/js/app.js"></script>
+</body>
+</html>
