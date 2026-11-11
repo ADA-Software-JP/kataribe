@@ -567,5 +567,13 @@
   "set.audio_exe": "audiocpp_server 可执行文件",
   "set.audio_model": "模型文件（GGUF）",
   "set.audio_help": "选择 Irodori-TTS 的 GGUF。更改后请点击“保存并重启语音模型”。",
-  "ui.ask": "想听什么？"
+  "ui.ask": "想听什么？",
+  "setup.audio_lead": "将安装用于生成语音的 audio.cpp（约 84MB）和语音模型（约 1.1GB）。",
+  "setup.audio_model_lead": "将下载语音模型（约 1.1GB）。",
+  "setup.auto_step_audio": "正在安装 audio.cpp",
+  "setup.auto_step_audio_model": "正在获取语音模型",
+  "setup.audio_manual": "如需自行安装，请获取以下两项，并在设置的“语音模型”中填写它们的位置。",
+  "setup.audio_bad_file": "未能完整接收 {name}。请重新进行设置。",
+  "setup.audio_no_asset": "找不到适用于此系统的 audio.cpp（{name}）。",
+  "setup.audio_no_exe": "已安装 audio.cpp，但找不到 audiocpp_server。"
 }

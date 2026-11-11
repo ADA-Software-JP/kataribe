@@ -567,5 +567,13 @@
   "set.audio_exe": "audiocpp_server executable",
   "set.audio_model": "Model file (GGUF)",
   "set.audio_help": "Choose an Irodori-TTS GGUF. After changing it, press \"Save and restart the voice model\".",
-  "ui.ask": "What would you like to hear?"
+  "ui.ask": "What would you like to hear?",
+  "setup.audio_lead": "This installs audio.cpp, which makes the voice (about 84 MB), and the voice model (about 1.1 GB).",
+  "setup.audio_model_lead": "This downloads the voice model (about 1.1 GB).",
+  "setup.auto_step_audio": "Installing audio.cpp",
+  "setup.auto_step_audio_model": "Downloading the voice model",
+  "setup.audio_manual": "To install them yourself, get these two and enter their locations under \"Voice model\" in Settings.",
+  "setup.audio_bad_file": "{name} did not arrive intact. Run setup again.",
+  "setup.audio_no_asset": "No audio.cpp build for this OS was found ({name}).",
+  "setup.audio_no_exe": "audio.cpp was installed, but audiocpp_server was not found."
 }

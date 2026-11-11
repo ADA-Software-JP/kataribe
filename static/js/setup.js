@@ -102,11 +102,29 @@ function speechCard() {
         retry)));
 }
 
+/** audio.cpp を選んでいて、実行ファイルかモデルが無い時のセットアップ。 */
+function audioCard() {
+  const noModel = S.engine.missing === "audio_model";
+  const retry = h("button", { class: "btn small", onclick: () => recheck(retry) }, t("setup.retry"));
+  return h("div", { class: "setup" },
+    h("h2", {}, t("setup.speech_title")),
+    autoRow(t(noModel ? "setup.audio_model_lead" : "setup.audio_lead")),
+    h("details", { class: "setup-manual" },
+      h("summary", {}, t("setup.manual")),
+      h("div", { class: "setup-row" },
+        h("div", { class: "setup-text" },
+          h("div", { class: "setup-step" }, t("setup.audio_manual"), " ",
+            h("a", { href: "https://github.com/0xShug0/audio.cpp/releases/latest", target: "_blank", rel: "noreferrer" }, "audio.cpp"), " / ",
+            h("a", { href: "https://huggingface.co/audio-cpp/audio.cpp-gguf/tree/main/Irodori-TTS-v4-Small-GGUF", target: "_blank", rel: "noreferrer" }, "Irodori-TTS GGUF"))),
+        h("button", { class: "btn small", onclick: () => emit("open-settings") }, t("ui.open_settings")),
+        retry)));
+}
+
 function render() {
   const box = $("#welcome");
   const speechMissing = S.engine.state === "error" && S.engine.missing;
   if (!speechMissing && S.llm.ok && !(result && !result.ok)) { box.replaceChildren(); return; }
-  if (speechMissing) { box.replaceChildren(speechCard()); return; }
+  if (speechMissing) { box.replaceChildren(S.engine.missing.startsWith("audio") ? audioCard() : speechCard()); return; }
   box.replaceChildren(h("div", { class: "setup" },
     h("h2", {}, needsLogin() ? t("setup.login_title", { name: S.llm.auth.name }) : t("setup.llm_title")),
     h("p", { class: "setup-lead" }, needsLogin()

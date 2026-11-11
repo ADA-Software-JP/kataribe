@@ -22,3 +22,5 @@ build/
 *.tmp
 kataribe.port
 .venv/
+tools/
+models/

@@ -2,6 +2,8 @@
 
 [日本語](README.md) | English | [简体中文](README.zh-Hans.md) | [繁體中文](README.zh-Hant.md)
 
+https://github.com/user-attachments/assets/a69ba1f2-ea7c-40d0-b959-9fef431311ed
+
 https://github.com/user-attachments/assets/91afa4d4-78fe-4e27-a7ec-b2127bd59329
 
 <br>

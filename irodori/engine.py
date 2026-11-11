@@ -140,7 +140,8 @@ class Engine:
                 "instructions": "instructions" in self.options() if m else True}
 
     def _set(self, state, error="", missing=""):
-        """missing: "speech"(実行ファイルが無い)か "model"(モデルが無い)。画面に用意のしかたを出す。"""
+        """missing: "speech"(実行ファイルが無い)、"model"(モデルが無い)、audio.cpp を選んでいる時は "audio" / "audio_model"。
+        画面に用意のしかたを出す。"""
         self.state, self.error, self.missing, self.since = state, error, missing, time.time()
         self.bus.emit("engine", self.snapshot())
 
@@ -228,13 +229,13 @@ class Engine:
             self.config.update({"audio_exe": exe})
         exe = Path(exe).expanduser() if exe else None
         if not exe or not exe.is_file():
-            self._set("error", t("eng.audio_missing", path=cfg["audio_exe"] or t("eng.unset")))
+            self._set("error", t("eng.audio_missing", path=cfg["audio_exe"] or t("eng.unset")), missing="audio")
             return
         model = Path(cfg["audio_model"]).expanduser() if cfg["audio_model"] else None
         if model and not model.is_absolute():
             model = ROOT / model
         if not model or not model.is_file():
-            self._set("error", t("eng.audio_no_model", path=cfg["audio_model"] or t("eng.unset")))
+            self._set("error", t("eng.audio_no_model", path=cfg["audio_model"] or t("eng.unset")), missing="audio_model")
             return
         model = model.resolve()
         try:

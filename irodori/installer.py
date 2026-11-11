@@ -1,19 +1,50 @@
 """足りない部品を、画面のボタン 1 つで入れる: speech.cpp(公式のインストーラー)と、声のモデル(speech pull)。
 入っているものはそのまま使い、足りないものだけ入れる。入れ先はどちらも speech.cpp の既定の場所
 (Windows は %LOCALAPPDATA%、macOS・Linux は ~/.local と ~/.cache など)で、Kataribe のフォルダーには入れない。"""
+import hashlib
+import json
 import os
+import platform
 import re
+import shutil
 import subprocess
+import tarfile
 import threading
+import urllib.error
+import urllib.request
+import zipfile
 from pathlib import Path
 
-from .config import IS_WINDOWS, find_speech, official_speech
+from .config import IS_MAC, IS_WINDOWS, ROOT, find_audio, find_speech, official_speech
 from .engine import CREATE_NO_WINDOW, log
 from .i18n import t
 
 # 公式のインストーラー(最新の版を入れる)。Kataribe が話せるかは、worker の protocol で確かめる(engine.PROTOCOLS)
 INSTALLER = "https://raw.githubusercontent.com/nyosegawa/speech.cpp/main/install"
 PERCENT = re.compile(r"(\d{1,3})(?:\.\d+)?\s*%")
+
+# audio.cpp: 実行ファイルは GitHub の最新リリースから、声のモデルは Hugging Face から取り、Kataribe のフォルダーの tools/ と models/ に置く。
+# どちらも SHA-256 を照合してから使う(リリースの digest、Hugging Face の LFS の oid)
+AUDIO_RELEASE = "https://api.github.com/repos/0xShug0/audio.cpp/releases/latest"
+AUDIO_MODEL_DIR = "Irodori-TTS-v4-Small-GGUF"
+AUDIO_MODEL = "irodori-tts-v4.1-anime-q8_0.gguf"
+AUDIO_MODEL_INFO = f"https://huggingface.co/api/models/audio-cpp/audio.cpp-gguf/tree/main/{AUDIO_MODEL_DIR}"
+AUDIO_MODEL_URL = f"https://huggingface.co/audio-cpp/audio.cpp-gguf/resolve/main/{AUDIO_MODEL_DIR}/{AUDIO_MODEL}"
+UA = {"User-Agent": "Kataribe"}
+
+
+def _audio_asset():
+    """この OS で使う audio.cpp の配布物の名前の終わり。"""
+    if IS_WINDOWS:
+        return "bin-windows-x64-vulkan.zip"
+    if IS_MAC:
+        return f"bin-macos-{'arm64' if platform.machine().lower() in ('arm64', 'aarch64') else 'x64'}-metal.tar.gz"
+    return "bin-ubuntu-x64-vulkan.tar.gz"
+
+
+def _get_json(url):
+    with urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=60) as res:
+        return json.loads(res.read())
 
 
 def _install_cmd():
@@ -84,9 +115,92 @@ class Installer:
             self._emit(state="running", step="", percent=None, line="", error="")
         threading.Thread(target=self._run, daemon=True).start()
 
+    def _download(self, url, dest, sha256=""):
+        """url を dest に落とす。途中まで落とした分(.part)があれば続きから。進み具合を画面へ送り、SHA-256 が合わなければ消して失敗にする。"""
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        part = dest.with_name(dest.name + ".part")
+        have = part.stat().st_size if part.exists() else 0
+        req = urllib.request.Request(url, headers=dict(UA, Range=f"bytes={have}-") if have else UA)
+        try:
+            res = urllib.request.urlopen(req, timeout=60)
+        except urllib.error.HTTPError as e:
+            if e.code != 416:   # 416: もう全部落としてある
+                raise
+            res = None
+        if res is not None:
+            if have and res.status != 206:   # 続きからを受け付けなかった: 最初から
+                have = 0
+            total = have + int(res.headers.get("Content-Length") or 0)
+            with res, open(part, "ab" if have else "wb") as out:
+                done, shown = have, -1
+                while True:
+                    chunk = res.read(1 << 20)
+                    if not chunk:
+                        break
+                    out.write(chunk)
+                    done += len(chunk)
+                    percent = int(done * 100 / total) if total else None
+                    if percent != shown:
+                        shown = percent
+                        self._emit(percent=percent, line=f"{done / 1e6:.0f} / {total / 1e6:.0f} MB" if total else f"{done / 1e6:.0f} MB")
+        if sha256:
+            digest = hashlib.sha256()
+            with open(part, "rb") as f:
+                for chunk in iter(lambda: f.read(1 << 20), b""):
+                    digest.update(chunk)
+            if digest.hexdigest() != sha256.lower():
+                part.unlink(missing_ok=True)
+                raise RuntimeError(t("setup.audio_bad_file", name=dest.name))
+        os.replace(part, dest)
+
+    def _run_audio(self, cfg):
+        """audio.cpp を選んでいる時: 足りない実行ファイルと声のモデルを入れる。"""
+        exe = cfg["audio_exe"] or find_audio()
+        if not exe or not Path(exe).expanduser().is_file():
+            self._emit(step="audio", percent=0, line="")
+            release = _get_json(AUDIO_RELEASE)
+            asset = next((a for a in release.get("assets", []) if a["name"].endswith(_audio_asset())), None)
+            if not asset:
+                raise RuntimeError(t("setup.audio_no_asset", name=_audio_asset()))
+            folder = ROOT / "tools" / "audio.cpp" / release["tag_name"]
+            archive = folder.with_name(asset["name"])
+            self._download(asset["browser_download_url"], archive, (asset.get("digest") or "").removeprefix("sha256:"))
+            self._emit(percent=None, line="")
+            shutil.rmtree(folder, ignore_errors=True)
+            folder.mkdir(parents=True)
+            if archive.name.endswith(".zip"):
+                with zipfile.ZipFile(archive) as z:
+                    z.extractall(folder)
+            else:
+                with tarfile.open(archive) as z:
+                    z.extractall(folder, filter="data")
+            archive.unlink(missing_ok=True)
+            found = next(iter(folder.rglob("audiocpp_server.exe" if IS_WINDOWS else "audiocpp_server")), None)
+            if not found:
+                raise RuntimeError(t("setup.audio_no_exe"))
+            if not IS_WINDOWS:
+                found.chmod(0o755)
+            self.config.update({"audio_exe": str(found)})
+            cfg = self.config.get()
+        model = Path(cfg["audio_model"]).expanduser() if cfg["audio_model"] else None
+        if model and not model.is_absolute():
+            model = ROOT / model
+        if not model or not model.is_file():
+            self._emit(step="audio_model", percent=0, line="")
+            rows = _get_json(AUDIO_MODEL_INFO)
+            row = next((r for r in rows if r.get("path", "").endswith("/" + AUDIO_MODEL)), {})
+            dest = ROOT / "models" / AUDIO_MODEL
+            self._download(AUDIO_MODEL_URL, dest, (row.get("lfs") or {}).get("oid", ""))
+            self.config.update({"audio_model": str(dest)})
+
     def _run(self):
         try:
             cfg = self.config.get()
+            if cfg["tts_backend"] == "audio":
+                self._run_audio(cfg)
+                self._emit(state="done", step="", percent=None)
+                self.engine.restart()
+                return
             missing = self.engine.missing
             have = cfg["speech_exe"] and Path(cfg["speech_exe"]).is_file()
             if not have or missing == "speech":
@@ -108,7 +222,7 @@ class Installer:
                 self._stream([cfg["speech_exe"], "pull", cfg["model"]], _env(cfg))
             self._emit(state="done", step="", percent=None)
             self.engine.restart()
-        except (OSError, RuntimeError) as e:
+        except (OSError, RuntimeError, ValueError, KeyError, zipfile.BadZipFile, tarfile.TarError) as e:
             log(f"setup failed: {e}")
             self._emit(state="error", error=str(e))
 

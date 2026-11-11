@@ -567,5 +567,13 @@
   "set.audio_exe": "audiocpp_server の実行ファイル",
   "set.audio_model": "モデルのファイル（GGUF）",
   "set.audio_help": "Irodori-TTS の GGUF を選びます。変えたら「保存して音声モデルを再起動」を押します。",
-  "ui.ask": "何を聞きますか"
+  "ui.ask": "何を聞きますか",
+  "setup.audio_lead": "声を作る audio.cpp（約 84MB）と、声のモデル（約 1.1GB）を入れます。",
+  "setup.audio_model_lead": "声のモデル（約 1.1GB）をダウンロードします。",
+  "setup.auto_step_audio": "audio.cpp を入れています",
+  "setup.auto_step_audio_model": "声のモデルを取得しています",
+  "setup.audio_manual": "自分で入れる時は、次の 2 つを取って、設定の「音声モデル」に場所を入れてください。",
+  "setup.audio_bad_file": "{name} を正しく受け取れませんでした。もう一度セットアップしてください。",
+  "setup.audio_no_asset": "この OS 向けの audio.cpp（{name}）が見つかりません。",
+  "setup.audio_no_exe": "audio.cpp を入れましたが、audiocpp_server が見つかりません。"
 }

@@ -25,7 +25,7 @@
 從右上角的齒輪開啟。
 
 - 語音合成模型：從 speech.cpp 支援的模型中選擇。朗讀的語言也可以在這裡選擇。
-- 語音引擎：除了 speech.cpp，也可以選擇 [audio.cpp](https://github.com/0xShug0/audio.cpp)。使用 audio.cpp 時，請填寫 `audiocpp_server` 執行檔和 Irodori-TTS 的 GGUF（如 Anime 版）的位置。
+- 語音引擎：除了 speech.cpp，也可以選擇 [audio.cpp](https://github.com/0xShug0/audio.cpp)。使用 audio.cpp 時，請填寫 `audiocpp_server` 執行檔和 Irodori-TTS 的 GGUF（如 Anime 版）的位置。按下首頁的「設定」，會自動安裝 audio.cpp 和語音模型（約 1.1GB）。
 - LLM：從 Claude Code、Codex、LM Studio 中選擇，並用「連線測試」確認。未登入 Claude Code 或 Codex 時，畫面上會出現登入按鈕。
 - 撰寫風格：可以修改交給 LLM 的指示。用「重設為預設值」恢復原樣。
 
