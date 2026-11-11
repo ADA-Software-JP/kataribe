@@ -25,7 +25,7 @@ The button at the top left opens a list of past conversations. Pick one to conti
 Open them with the gear at the top right.
 
 - Speech model: choose from the models speech.cpp supports. You can also choose the reading language here.
-- Voice engine: besides speech.cpp you can choose [audio.cpp](https://github.com/0xShug0/audio.cpp). For audio.cpp, enter the paths to the `audiocpp_server` executable and an Irodori-TTS GGUF (such as the Anime version). Press "Setup" on the first screen to install audio.cpp and the voice model (about 1.1 GB) automatically.
+- Voice engine: besides speech.cpp you can choose [audio.cpp](https://github.com/0xShug0/audio.cpp). For audio.cpp, enter the paths to the `audiocpp_server` executable and an Irodori-TTS GGUF (such as the Anime version). Press "Set up" on the first screen to install audio.cpp and the voice model (about 1.1 GB) automatically.
 - LLM: choose Claude Code, Codex, or LM Studio, and check it with "Connection test". If you are not signed in to Claude Code or Codex, a "Sign in" button appears.
 - Writing style: edit the instructions given to the LLM. "Reset to default" puts them back.
 
