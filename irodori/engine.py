@@ -18,7 +18,8 @@ import urllib.request
 import wave
 from pathlib import Path
 
-from .config import IS_MAC, IS_WINDOWS, ROOT, find_audio, find_speech, official_speech
+from . import audio_models
+from .config import IS_MAC, IS_WINDOWS, find_audio, find_speech, official_speech
 from .i18n import t
 
 CREATE_NO_WINDOW = 0x08000000
@@ -117,7 +118,7 @@ class Engine:
 
     def snapshot(self):
         return {"state": self.state, "error": self.error, "missing": self.missing, "since": self.since,
-                "voices": list(self.voices), "model": self.model_summary()}
+                "voices": list(self.voices), "model": self.model_summary(), "audio_models": audio_models.listing(self.config.get())}
 
     # --- 読み込んだモデルでできること(モデルごとに違う) ---------------------------------------------
     def options(self):
@@ -231,13 +232,12 @@ class Engine:
         if not exe or not exe.is_file():
             self._set("error", t("eng.audio_missing", path=cfg["audio_exe"] or t("eng.unset")), missing="audio")
             return
-        model = Path(cfg["audio_model"]).expanduser() if cfg["audio_model"] else None
-        if model and not model.is_absolute():
-            model = ROOT / model
-        if not model or not model.is_file():
-            self._set("error", t("eng.audio_no_model", path=cfg["audio_model"] or t("eng.unset")), missing="audio_model")
+        entry, model = audio_models.current(cfg)
+        if not model.is_file():
+            self._set("error", t("eng.audio_no_model", path=cfg["audio_model"] or entry["name"]), missing="audio_model")
             return
         model = model.resolve()
+        self._entry = entry
         try:
             self.config.path("voices_dir").mkdir(parents=True, exist_ok=True)
             with socket.socket() as sock:
@@ -245,12 +245,13 @@ class Engine:
                 self._port = sock.getsockname()[1]
             conf = Path(tempfile.gettempdir()) / f"kataribe-audio-{os.getpid()}.json"
             conf.write_text(json.dumps({"host": "127.0.0.1", "port": self._port, "lazy_load": False, "max_loaded_models": 1, "models": [
-                {"id": "tts", "family": "irodori_tts", "task": "tts", "mode": "offline", "path": model.as_posix()}]}), encoding="utf-8")
+                {"id": "tts", "family": entry["family"], "task": "tts", "mode": "offline", "path": model.as_posix()}]}), encoding="utf-8")
         except OSError as e:
             self._set("error", t("eng.start_failed", e=e))
             return
-        files = self.voice_files()
-        files.update({n: Path(p) for n, p in self._added.items() if Path(p).is_file() and str(p).lower().endswith(".wav")})
+        files = self.voice_files() if entry["clone"] else {}   # 入っている声だけで話すモデルは、登録した声(WAV)を使わない
+        if entry["clone"]:
+            files.update({n: Path(p) for n, p in self._added.items() if Path(p).is_file() and str(p).lower().endswith(".wav")})
         self._added = {n: str(p) for n, p in files.items()}
         self.voices = list(files)
         backend = audio_backend(str(exe))
@@ -271,10 +272,10 @@ class Engine:
         self._set("starting")
         log(f"audio.cpp start backend={backend} voices={len(files)}")
         threading.Thread(target=self._read_stderr, args=(proc,), daemon=True).start()
-        threading.Thread(target=self._boot_audio, args=(boot_id, proc, model), daemon=True).start()
+        threading.Thread(target=self._boot_audio, args=(boot_id, proc, entry), daemon=True).start()
         threading.Thread(target=self._watchdog, args=(boot_id,), daemon=True).start()
 
-    def _boot_audio(self, boot_id, proc, model):
+    def _boot_audio(self, boot_id, proc, entry):
         """サーバーが応えるまで待ち、モデルでできることを決めて、1 本読ませて暖める。"""
         while proc.poll() is None and boot_id == self._boot_id:
             try:
@@ -287,10 +288,15 @@ class Engine:
         if proc.poll() is not None:
             self._set("error", t("eng.exited", code=proc.poll(), tail=self._tail_text()))
             return
-        # Irodori-TTS(日本語)。参照なし("none")でも、WAV を参照の声にしても話せる。話し方(instruct)も受け付ける
-        self.model = {"name": model.stem, "architecture": "irodori-tts", "languages": ["ja"], "sample_rate": 48000, "voices": [],
-                      "voice_files": True, "meanflow": "-mf" in model.stem.lower(),
-                      "options": [{"name": "voice", "choices": ["none"]}] + [{"name": n} for n in ("steps", "seed", "instructions", "speed", "language", "keep_tail")]}
+        # モデルでできること(audio_models.py の一覧から)。声を文章で決められるモデルは参照なし("none")でも話せ、
+        # 入っている声で話すモデルは、その声の名前を選ぶ
+        irodori = entry["family"] == "irodori_tts"
+        names = (["none"] if entry["design"] else []) + [v["name"] for v in entry["voices"]]
+        accepts = ["seed", "language", "keep_tail"] + (["steps"] if entry["steps"] else []) + (["speed"] if entry["family"] != "qwen3_tts" else [])
+        accepts += ["instructions"] if entry["family"] != "supertonic" else []
+        self.model = {"name": entry["name"], "architecture": "irodori-tts" if irodori else entry["family"], "languages": list(entry["languages"]),
+                      "sample_rate": 48000, "voices": list(entry["voices"]), "voice_files": entry["clone"],
+                      "options": [{"name": "voice", "choices": names}] + [{"name": n} for n in accepts]}
         self.sample_rate = 48000
         threading.Thread(target=self._warm, args=(boot_id,), daemon=True).start()
         proc.wait()
@@ -300,23 +306,36 @@ class Engine:
     def _audio_request(self, fields, out):
         """1 本を作らせる(別スレッドで動く)。結果は out に入れる: {"pcm", "end"} か {"error"}。"""
         voice = fields.get("voice") or "none"
+        family = self._entry["family"]
         options = {"seed": int(fields["seed"]) if fields.get("seed") is not None else random.randrange(2**31)}
         body = {"model": "tts", "input": fields["text"], "options": options}
         try:
-            if voice == "none":
-                options["no_ref"] = True
+            speed = float(fields.get("speed") or 1.0)
+            if family == "irodori_tts":
+                if voice == "none":
+                    options["no_ref"] = True
+                else:
+                    body["voice_ref"] = Path(self._added[voice]).as_posix()
+                if fields.get("instructions"):
+                    options["instruct"] = fields["instructions"]
+                if fields.get("steps"):
+                    options["num_inference_steps"] = int(fields["steps"])   # 段数の設定は MeanFlow 版のもの。ほかはモデルの既定に任せる
+                if speed != 1.0:
+                    options["duration_scale"] = round(1.0 / speed, 3)
             else:
-                body["voice_ref"] = Path(self._added[voice]).as_posix()
-            if fields.get("instructions"):
-                options["instruct"] = fields["instructions"]
-            if fields.get("steps") and self.model.get("meanflow"):
-                options["num_inference_steps"] = int(fields["steps"])   # 段数の設定は MeanFlow 版のもの。ほかはモデルの既定に任せる
-            if fields.get("speed") and float(fields["speed"]) != 1.0:
-                options["duration_scale"] = round(1.0 / float(fields["speed"]), 3)
+                # 入っている声で話すモデル(Supertonic、Qwen3-TTS): 声の名前と言語を渡す
+                options["voice_id"] = voice
+                if fields.get("language"):
+                    options["language"] = fields["language"]
+                if family == "supertonic" and speed != 1.0:
+                    options["speed"] = round(1.05 * speed, 3)   # 1.05 がこのモデルの標準の速さ
+                if family == "qwen3_tts" and fields.get("instructions"):
+                    options["instruct"] = fields["instructions"]
             req = urllib.request.Request(f"http://127.0.0.1:{self._port}/v1/audio/speech", json.dumps(body).encode("utf-8"),
                                          {"Content-Type": "application/json"})
             with wave.open(io.BytesIO(urllib.request.urlopen(req, timeout=300).read())) as w:
                 pcm = w.readframes(w.getnframes())
+                self.sample_rate = w.getframerate()   # モデルごとに違う(48000 / 44100 / 24000)
             out.update(pcm=pcm, end={"seed": options["seed"], "stop": "complete", "samples": len(pcm) // 2})
         except urllib.error.HTTPError as e:
             try:

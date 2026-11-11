@@ -202,6 +202,20 @@ select.field-input { padding-right: var(--s2); }
 .setup-step { color: var(--text-2); }
 .setup-step a { color: var(--text); }
 .setup-manual { border-top: 1px solid var(--border); padding-top: var(--s2); }
+/* 声のモデルを選ぶ行(セットアップ) */
+.model-list { display: grid; gap: var(--s1); }
+.model-row {
+  display: flex; align-items: center; gap: var(--s3); min-height: 56px; padding: var(--s2) var(--s3); border-radius: var(--r2); text-align: left;
+  background: transparent; border: 1px solid var(--border); color: var(--text); transition: background 0.15s, border-color 0.15s;
+}
+.model-row:hover:not(:disabled) { background: var(--surface-2); }
+.model-row[aria-checked="true"] { border-color: var(--accent-line); background: var(--accent-soft); }
+.model-mark { flex: none; width: 16px; height: 16px; border-radius: 50%; border: 1px solid var(--border-strong); }
+.model-row[aria-checked="true"] .model-mark { border: 5px solid var(--accent); }
+.model-text { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.model-name { display: flex; align-items: center; gap: var(--s2); font-weight: 600; }
+.model-meta { color: var(--text-2); font-size: 14px; }
+.model-size { flex: none; color: var(--text-2); font-size: 14px; font-variant-numeric: tabular-nums; }
 .setup-manual summary { cursor: pointer; color: var(--text-2); padding: var(--s1) 0; }
 .cmd { display: flex; align-items: center; gap: var(--s2); padding: var(--s2) var(--s3); border-radius: var(--r2); border: 1px solid var(--border-strong); background: var(--surface-2); }
 .cmd code { flex: 1; min-width: 0; font-family: ui-monospace, Consolas, monospace; font-size: 14px; overflow-wrap: anywhere; user-select: all; }

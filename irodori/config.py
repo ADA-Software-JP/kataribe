@@ -94,9 +94,10 @@ def default_model():
 
 def _defaults():
     return {
-        "tts_backend": "speech",   # 声を作るエンジン: speech(speech.cpp)か audio(audio.cpp、Irodori-TTS の Anime 版などを使う時に選ぶ)
+        "tts_backend": "audio",   # 声を作るエンジン: audio(audio.cpp、新しく入れた時の既定)か speech(speech.cpp、以前から使っている人はこちらのまま)
+        "audio_pick": "",            # audio.cpp で使うモデル(audio_models.py の一覧の id)。空なら言語に合わせて選ぶ
         "audio_exe": find_audio(),   # audio.cpp の audiocpp_server
-        "audio_model": "",           # audio.cpp で読む Irodori-TTS の GGUF(例: irodori-tts-v4.1-anime-q8_0.gguf)
+        "audio_model": "",           # 一覧に無い GGUF を自分で指定する時の場所(空なら audio_pick のモデルを models/ から読む)
         "speech_exe": _find_speech(),
         "model_dir": "",   # 空なら speech.cpp の既定の保存先
         "model": default_model(),
@@ -234,10 +235,14 @@ class Config:
             try:
                 saved = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
                 _merge(self._data, saved)
+                # 声を作るエンジンの項目が無い設定は、speech.cpp だけだった頃のもの。そのまま speech.cpp で使い続ける
+                legacy_engine = "tts_backend" not in saved
+                if legacy_engine:
+                    self._data["tts_backend"] = "speech"
                 # 以前の style_prompt は prompts.style に移す
                 if isinstance(saved.get("style_prompt"), str) and not self._data["prompts"]["style"]:
                     self._data["prompts"]["style"] = saved["style_prompt"]
-                if _fix_llm(self._data, legacy=True) | _fix_tuning(self._data) | _fix_language(self._data, saved) | _fix_web_search(self._data) | _fix_shortcuts(self._data) | _fix_dirs(self._data):
+                if _fix_llm(self._data, legacy=True) | _fix_tuning(self._data) | _fix_language(self._data, saved) | _fix_web_search(self._data) | _fix_shortcuts(self._data) | _fix_dirs(self._data) | legacy_engine:
                     self._write()
             except (OSError, ValueError, AttributeError):
                 pass

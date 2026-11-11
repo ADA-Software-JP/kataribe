@@ -25,7 +25,7 @@ https://github.com/user-attachments/assets/91afa4d4-78fe-4e27-a7ec-b2127bd59329
 ## 關於語音模型和聲音
 
 產生聲音的模型可以在設定中切換。
-語音由 [speech.cpp](https://github.com/nyosegawa/speech.cpp) 產生，預設模型為 [Irodori-TTS](https://huggingface.co/Aratako/Irodori-TTS-500M)。在非日語環境中，會先選擇支援英語、中文等 10 種語言的 Qwen3-TTS。
+語音由 [audio.cpp](https://github.com/0xShug0/audio.cpp) 產生（已在使用 [speech.cpp](https://github.com/nyosegawa/speech.cpp) 的使用者可繼續使用）。語音模型可在首頁選擇：日語為 [Irodori-TTS](https://huggingface.co/Aratako/Irodori-TTS-500M)，其他語言為 Supertonic 3（31 種語言）和 Qwen3-TTS（中文等 10 種語言）。
 
 - **Irodori-TTS**：日語。預設模型。用文字描述就能建立聲音並儲存。
 - **Qwen3-TTS**：10 種語言（含英語、中文、日語、韓語）。從 aiden、ryan、serena 等 9 種內建聲音中選擇。「慢一點」「低沉平靜」等說話方式的指示會生效。
@@ -63,7 +63,7 @@ python server.py
 
 ### 2. 首次設定
 
-首次啟動時會顯示設定畫面。執行後，會自動下載語音合成引擎 `speech.cpp` 和預設語音模型（日語約 1.9GB，其他語言約 1.2GB）。
+首次啟動時會顯示設定畫面。選擇語音模型並執行後，會自動下載語音合成引擎 `audio.cpp`（約 84MB）和所選模型（0.5～2.8GB）。
 
 ### 3. 打包成應用程式（選用）
 
@@ -80,4 +80,4 @@ python -m PyInstaller --noconfirm --clean Kataribe.spec
 ## 授權
 
 [Apache License 2.0](LICENSE)
-[speech.cpp](https://github.com/nyosegawa/speech.cpp)、[Irodori-TTS](https://huggingface.co/Aratako/Irodori-TTS-500M) 等各語音模型遵循各自的授權。
+[audio.cpp](https://github.com/0xShug0/audio.cpp)、[speech.cpp](https://github.com/nyosegawa/speech.cpp) 以及 [Irodori-TTS](https://huggingface.co/Aratako/Irodori-TTS-500M) 等各語音模型遵循各自的授權。

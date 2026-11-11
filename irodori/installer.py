@@ -15,6 +15,7 @@ import urllib.request
 import zipfile
 from pathlib import Path
 
+from . import audio_models
 from .config import IS_MAC, IS_WINDOWS, ROOT, find_audio, find_speech, official_speech
 from .engine import CREATE_NO_WINDOW, log
 from .i18n import t
@@ -26,10 +27,6 @@ PERCENT = re.compile(r"(\d{1,3})(?:\.\d+)?\s*%")
 # audio.cpp: 実行ファイルは GitHub の最新リリースから、声のモデルは Hugging Face から取り、Kataribe のフォルダーの tools/ と models/ に置く。
 # どちらも SHA-256 を照合してから使う(リリースの digest、Hugging Face の LFS の oid)
 AUDIO_RELEASE = "https://api.github.com/repos/0xShug0/audio.cpp/releases/latest"
-AUDIO_MODEL_DIR = "Irodori-TTS-v4-Small-GGUF"
-AUDIO_MODEL = "irodori-tts-v4.1-anime-q8_0.gguf"
-AUDIO_MODEL_INFO = f"https://huggingface.co/api/models/audio-cpp/audio.cpp-gguf/tree/main/{AUDIO_MODEL_DIR}"
-AUDIO_MODEL_URL = f"https://huggingface.co/audio-cpp/audio.cpp-gguf/resolve/main/{AUDIO_MODEL_DIR}/{AUDIO_MODEL}"
 UA = {"User-Agent": "Kataribe"}
 
 
@@ -182,16 +179,14 @@ class Installer:
                 found.chmod(0o755)
             self.config.update({"audio_exe": str(found)})
             cfg = self.config.get()
-        model = Path(cfg["audio_model"]).expanduser() if cfg["audio_model"] else None
-        if model and not model.is_absolute():
-            model = ROOT / model
-        if not model or not model.is_file():
+        entry, model = audio_models.current(cfg)
+        if not model.is_file():
+            if cfg["audio_model"]:
+                raise RuntimeError(t("eng.audio_no_model", path=cfg["audio_model"]))   # 自分で指定した GGUF は、こちらでは取れない
             self._emit(step="audio_model", percent=0, line="")
-            rows = _get_json(AUDIO_MODEL_INFO)
-            row = next((r for r in rows if r.get("path", "").endswith("/" + AUDIO_MODEL)), {})
-            dest = ROOT / "models" / AUDIO_MODEL
-            self._download(AUDIO_MODEL_URL, dest, (row.get("lfs") or {}).get("oid", ""))
-            self.config.update({"audio_model": str(dest)})
+            rows = _get_json(audio_models.info_url(entry))
+            row = next((r for r in rows if r.get("path", "").endswith("/" + entry["file"])), {})
+            self._download(audio_models.url(entry), model, (row.get("lfs") or {}).get("oid", ""))
 
     def _run(self):
         try:

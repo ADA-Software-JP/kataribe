@@ -234,7 +234,7 @@ export async function openSettings(section, restore = null) {
   const f = {
     lmUrl: text(c.llm.lmstudio.base_url, "http://localhost:1234/v1"), lmModel: text(c.llm.lmstudio.model, t("set.lm_model_ph")),
     exe: text(c.speech_exe, t("set.exe_ph")), modelDir: text(c.model_dir, t("set.modeldir_ph")),
-    audioExe: text(c.audio_exe, "audiocpp_server"), audioModel: text(c.audio_model, "irodori-tts-v4.1-anime-q8_0.gguf"),
+    audioExe: text(c.audio_exe, "audiocpp_server"), audioModel: text(c.audio_model, t("set.audio_model_ph")),
     out: text(c.output_dir), voicesDir: text(c.voices_dir),
     voicePath: text("", t("set.voicepath_ph")),
   };
@@ -432,7 +432,7 @@ export async function openSettings(section, restore = null) {
 
   const saveAll = async (restart) => {
     try {
-      await saveConfig({ tts_backend: backendSel.value, audio_exe: f.audioExe.value.trim(), audio_model: f.audioModel.value.trim(),
+      await saveConfig({ tts_backend: backendSel.value, audio_exe: f.audioExe.value.trim(), audio_model: f.audioModel.value.trim(), audio_pick: audioPick.value,
         speech_exe: f.exe.value.trim(), model_dir: f.modelDir.value.trim(), model: modelSel.value,
         speak_language: speakSel.value || "auto", tts_voice: ttsVoiceSel.value,
         device: deviceSel.value, output_dir: f.out.value.trim(), voices_dir: f.voicesDir.value.trim(), llm: llmPatch(), web_search: web.checked,
@@ -478,6 +478,11 @@ export async function openSettings(section, restore = null) {
   const backendSel = h("select", { class: "field-input", "aria-label": t("set.backend") },
     h("option", { value: "speech" }, "speech.cpp"), h("option", { value: "audio" }, "audio.cpp"));
   backendSel.value = c.tts_backend === "audio" ? "audio" : "speech";
+  // audio.cpp のモデル(一覧から選ぶ。入っていないものは、保存して再起動したあと最初の画面の「セットアップ」で入る)
+  const audioPick = h("select", { class: "field-input", "aria-label": t("set.audio_pick") },
+    ...(S.engine.audio_models || []).map((m) => h("option", { value: m.id }, `${m.name} · ${m.languages.length > 3 ? t("set.langs_n", { n: m.languages.length }) : m.languages.map(langName).join(", ")} · ${m.gb} GB${m.installed ? "" : " · " + t("set.not_fetched")}`)));
+  audioPick.value = (S.engine.audio_models || []).find((m) => m.picked)?.id || "";
+  audioPick.addEventListener("change", () => unsaved.classList.remove("hidden"));
   const paintBackend = () => { for (const el of drawer.querySelectorAll("[data-backend]")) el.classList.toggle("hidden", el.dataset.backend !== backendSel.value); };
   backendSel.addEventListener("change", () => { paintBackend(); ttsDirty(); });
   setTimeout(paintBackend);
@@ -570,7 +575,7 @@ export async function openSettings(section, restore = null) {
         row(t("set.backend"), backendSel),
         ...[row(t("set.exe"), f.exe), row(t("set.model_dir"), f.modelDir), row(t("set.model_name"), modelSel),
           h("span", { class: "help" }, t("set.model_help"))].map((el) => { el.dataset.backend = "speech"; return el; }),
-        ...[row(t("set.audio_exe"), f.audioExe), row(t("set.audio_model"), f.audioModel),
+        ...[row(t("set.audio_pick"), audioPick), row(t("set.audio_exe"), f.audioExe), row(t("set.audio_model"), f.audioModel),
           h("span", { class: "help" }, t("set.audio_help"))].map((el) => { el.dataset.backend = "audio"; return el; }),
         row(t("set.speak_language"), speakSel), ttsVoiceRow, row(t("set.device"), deviceSel),
         h("label", { class: "switch" }, asr, h("span", { class: "sw" }), t("set.asr")),

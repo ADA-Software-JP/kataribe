@@ -1,5 +1,5 @@
 import { iconEl } from "./icons.js";
-import { t } from "./i18n.js";
+import { getLang, t } from "./i18n.js";
 import { loginBlock, needsLogin } from "./login.js";
 import { $, S, api, emit, h, on, toast } from "./state.js";
 
@@ -105,13 +105,41 @@ function speechCard() {
         retry)));
 }
 
+const langName = (code) => { try { return new Intl.DisplayNames([getLang()], { type: "language" }).of(code) || code; } catch { return code; } };
+
+/** 声のモデルを選ぶ。選ぶと設定に入り、「セットアップ」でそのモデルが入る(入っていれば、すぐ使える)。 */
+async function pickModel(id) {
+  try {
+    S.config = await api("PUT", "/api/config", { audio_pick: id, audio_model: "" });
+    await api("POST", "/api/engine/restart", {});
+  } catch (e) { toast(e.message, { kind: "err" }); }
+}
+
+function modelRows() {
+  const busy = (S.setup || {}).state === "running";
+  return h("div", { class: "model-list", role: "radiogroup", "aria-label": t("setup.model_pick") },
+    ...(S.engine.audio_models || []).map((m) => {
+      const langs = m.languages.length > 4 ? t("setup.model_langs_n", { first: m.languages.slice(0, 3).map(langName).join(t("setup.sep")), n: m.languages.length }) : m.languages.map(langName).join(t("setup.sep"));
+      const voice = m.design ? t("setup.model_design") : t("setup.model_voices", { n: m.voices });
+      return h("button", { type: "button", class: "model-row", role: "radio", "aria-checked": String(m.picked), disabled: busy, onclick: () => { if (!m.picked) pickModel(m.id); } },
+        h("span", { class: "model-mark" }),
+        h("span", { class: "model-text" },
+          h("span", { class: "model-name" }, m.name, m.installed ? h("span", { class: "setup-now" }, t("setup.model_installed")) : null),
+          h("span", { class: "model-meta" }, `${langs} · ${voice}`)),
+        h("span", { class: "model-size" }, t("setup.model_gb", { gb: m.gb })));
+    }));
+}
+
 /** audio.cpp を選んでいて、実行ファイルかモデルが無い時のセットアップ。 */
 function audioCard() {
   const noModel = S.engine.missing === "audio_model";
   const retry = h("button", { class: "btn small", onclick: () => recheck(retry) }, t("setup.retry"));
+  const picked = (S.engine.audio_models || []).find((m) => m.picked);
   return h("div", { class: "setup" },
     h("h2", {}, t("setup.speech_title")),
-    autoRow(t(noModel ? "setup.audio_model_lead" : "setup.audio_lead")),
+    h("p", { class: "setup-lead" }, t("setup.model_pick_lead")),
+    modelRows(),
+    autoRow(t(noModel ? "setup.audio_model_lead" : "setup.audio_lead", { gb: picked ? picked.gb : "" })),
     h("details", { class: "setup-manual" },
       h("summary", {}, t("setup.manual")),
       h("div", { class: "setup-row" },

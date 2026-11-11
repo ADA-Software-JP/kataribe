@@ -86,7 +86,7 @@ def api_config_put(body):
         if not isinstance(body["default_how"], str):
             raise ApiError(t("srv.bad_config"))
         body = dict(body, default_how=body["default_how"].strip()[:200])
-    for key in ("speak_language", "tts_voice"):
+    for key in ("speak_language", "tts_voice", "audio_pick"):
         if key in body and not isinstance(body[key], str):
             raise ApiError(t("srv.bad_config"))
     if "web_search" in body and not isinstance(body["web_search"], bool):

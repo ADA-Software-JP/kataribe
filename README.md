@@ -25,7 +25,7 @@ https://github.com/user-attachments/assets/91afa4d4-78fe-4e27-a7ec-b2127bd59329
 ## 音声モデルと声について
 
 声を生成するモデルは、設定から切り替えられます。
-音声の生成には [speech.cpp](https://github.com/nyosegawa/speech.cpp) を使います。標準のモデルは [Irodori-TTS](https://huggingface.co/Aratako/Irodori-TTS-500M) です。 日本語以外の環境では、英語・中国語など 10 言語を話せる Qwen3-TTS が最初に選ばれます。
+音声の生成には [audio.cpp](https://github.com/0xShug0/audio.cpp) を使います（以前から使っている場合は [speech.cpp](https://github.com/nyosegawa/speech.cpp) のまま使えます）。声のモデルは最初の画面で選べます。日本語は [Irodori-TTS](https://huggingface.co/Aratako/Irodori-TTS-500M)、ほかの言語は Supertonic 3（31 言語）と Qwen3-TTS（中国語など 10 言語）です。
 
 - **Irodori-TTS**：日本語。標準のモデルです。文章で声を作って保存できます。
 - **Qwen3-TTS**：10 言語（日本語・英語・中国語・韓国語ほか）。aiden、ryan、serena など 9 種類の声から選びます。「ゆっくり」「低く落ち着いて」といった話し方の指示も反映されます。
@@ -63,7 +63,7 @@ python server.py
 
 ### 2. 初回セットアップ
 
-初回起動時にセットアップ画面が表示されます。実行すると、音声合成エンジンの `speech.cpp` とデフォルトの音声モデル（日本語は約1.9GB、ほかの言語は約1.2GB）が自動でダウンロードされます。
+初回起動時にセットアップ画面が表示されます。声のモデルを選んで実行すると、音声合成エンジンの `audio.cpp`（約84MB）と選んだモデル（0.5〜2.8GB）が自動でダウンロードされます。
 
 ### 3. アプリ化（任意）
 
@@ -80,4 +80,4 @@ python -m PyInstaller --noconfirm --clean Kataribe.spec
 ## ライセンス
 
 [Apache License 2.0](LICENSE)
-[speech.cpp](https://github.com/nyosegawa/speech.cpp) や [Irodori-TTS](https://huggingface.co/Aratako/Irodori-TTS-500M) などの各音声モデルは、それぞれのライセンスに従います。
+[audio.cpp](https://github.com/0xShug0/audio.cpp)、[speech.cpp](https://github.com/nyosegawa/speech.cpp) や [Irodori-TTS](https://huggingface.co/Aratako/Irodori-TTS-500M) などの各音声モデルは、それぞれのライセンスに従います。
