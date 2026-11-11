@@ -25,6 +25,7 @@
 从右上角的齿轮打开。
 
 - 语音合成模型：从 speech.cpp 支持的模型中选择。朗读的语言也可以在这里选择。
+- 语音引擎：除了 speech.cpp，还可以选择 [audio.cpp](https://github.com/0xShug0/audio.cpp)。使用 audio.cpp 时，请填写 `audiocpp_server` 可执行文件和 Irodori-TTS 的 GGUF（如 Anime 版）的位置。
 - LLM：从 Claude Code、Codex、LM Studio 中选择，并用「连接测试」确认。未登录 Claude Code 或 Codex 时，界面上会出现登录按钮。
 - 写作风格：可以修改交给 LLM 的指示。用「重置为默认」恢复原样。
 

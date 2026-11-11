@@ -452,7 +452,7 @@
   "set.import": "匯入",
   "set.imported": "已匯入 {n} 個{skipped}",
   "set.imported_skipped": "（有 {n} 個因名稱已存在而略過）",
-  "set.speech": "語音模型（speech.cpp）",
+  "set.speech": "語音模型",
   "set.exe": "speech 執行檔",
   "set.model_dir": "模型資料夾",
   "set.model_name": "語音合成模型",
@@ -559,5 +559,13 @@
   "set.not_fetched": "未下載",
   "set.gender_male": "男性",
   "set.gender_female": "女性",
-  "set.model_help": "更換模型後，請按「儲存並重新啟動語音模型」。尚未下載的模型，之後可用「安裝」下載。"
+  "set.model_help": "更換模型後，請按「儲存並重新啟動語音模型」。尚未下載的模型，之後可用「安裝」下載。",
+  "eng.audio_missing": "找不到 audio.cpp 伺服器（audiocpp_server）：{path}",
+  "eng.audio_no_model": "找不到 audio.cpp 要讀取的模型（GGUF）：{path}",
+  "eng.audio_wav_only": "audio.cpp 只能使用 WAV 聲音",
+  "set.backend": "語音引擎",
+  "set.audio_exe": "audiocpp_server 執行檔",
+  "set.audio_model": "模型檔案（GGUF）",
+  "set.audio_help": "選擇 Irodori-TTS 的 GGUF。變更後請按「儲存並重新啟動語音模型」。",
+  "ui.ask": "想聽什麼？"
 }

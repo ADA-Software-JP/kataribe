@@ -452,7 +452,7 @@
   "set.import": "取り込む",
   "set.imported": "{n} 個を取り込みました{skipped}",
   "set.imported_skipped": "（{n} 個は同名のため省略）",
-  "set.speech": "音声モデル（speech.cpp）",
+  "set.speech": "音声モデル",
   "set.exe": "speech の実行ファイル",
   "set.model_dir": "モデル保存先",
   "set.model_name": "音声合成のモデル",
@@ -559,5 +559,13 @@
   "set.not_fetched": "未取得",
   "set.gender_male": "男性",
   "set.gender_female": "女性",
-  "set.model_help": "モデルを変えたら「保存して音声モデルを再起動」を押します。未取得のモデルは、そのあと「セットアップ」で入ります。"
+  "set.model_help": "モデルを変えたら「保存して音声モデルを再起動」を押します。未取得のモデルは、そのあと「セットアップ」で入ります。",
+  "eng.audio_missing": "audio.cpp のサーバー（audiocpp_server）が見つかりません: {path}",
+  "eng.audio_no_model": "audio.cpp で読むモデル（GGUF）が見つかりません: {path}",
+  "eng.audio_wav_only": "audio.cpp で使える声は WAV だけです",
+  "set.backend": "声を作るエンジン",
+  "set.audio_exe": "audiocpp_server の実行ファイル",
+  "set.audio_model": "モデルのファイル（GGUF）",
+  "set.audio_help": "Irodori-TTS の GGUF を選びます。変えたら「保存して音声モデルを再起動」を押します。",
+  "ui.ask": "何を聞きますか"
 }

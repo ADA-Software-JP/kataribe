@@ -452,7 +452,7 @@
   "set.import": "Import",
   "set.imported": "Imported {n}{skipped}",
   "set.imported_skipped": " ({n} skipped because the names already exist)",
-  "set.speech": "Voice model (speech.cpp)",
+  "set.speech": "Voice model",
   "set.exe": "speech executable",
   "set.model_dir": "Model folder",
   "set.model_name": "Speech model",
@@ -559,5 +559,13 @@
   "set.not_fetched": "not downloaded",
   "set.gender_male": "male",
   "set.gender_female": "female",
-  "set.model_help": "After changing the model, press \"Save and restart the voice model\". A model not downloaded yet is then installed with \"Set up\"."
+  "set.model_help": "After changing the model, press \"Save and restart the voice model\". A model not downloaded yet is then installed with \"Set up\".",
+  "eng.audio_missing": "Could not find the audio.cpp server (audiocpp_server): {path}",
+  "eng.audio_no_model": "Could not find the model file (GGUF) for audio.cpp: {path}",
+  "eng.audio_wav_only": "audio.cpp can only use WAV voices",
+  "set.backend": "Voice engine",
+  "set.audio_exe": "audiocpp_server executable",
+  "set.audio_model": "Model file (GGUF)",
+  "set.audio_help": "Choose an Irodori-TTS GGUF. After changing it, press \"Save and restart the voice model\".",
+  "ui.ask": "What would you like to hear?"
 }

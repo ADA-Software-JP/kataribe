@@ -1,6 +1,6 @@
 const NAMES = [
-  "audio-lines", "bookmark", "bookmark-check", "check", "chevron-down", "folder-open", "loader-circle", "mic", "panel-left", "pause", "play", "plug",
-  "rotate-ccw", "send", "settings", "speech", "square", "square-pen", "star", "trash-2", "triangle-alert",
+  "audio-lines", "bookmark", "bookmark-check", "check", "chevron-down", "folder-open", "loader-circle", "mic", "moon", "panel-left", "pause", "play", "plug",
+  "rotate-ccw", "send", "settings", "speech", "square", "square-pen", "star", "sun", "trash-2", "triangle-alert",
 ];
 
 const cache = new Map();

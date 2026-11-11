@@ -234,6 +234,7 @@ export async function openSettings(section, restore = null) {
   const f = {
     lmUrl: text(c.llm.lmstudio.base_url, "http://localhost:1234/v1"), lmModel: text(c.llm.lmstudio.model, t("set.lm_model_ph")),
     exe: text(c.speech_exe, t("set.exe_ph")), modelDir: text(c.model_dir, t("set.modeldir_ph")),
+    audioExe: text(c.audio_exe, "audiocpp_server"), audioModel: text(c.audio_model, "irodori-tts-v4.1-anime-q8_0.gguf"),
     out: text(c.output_dir), voicesDir: text(c.voices_dir),
     voicePath: text("", t("set.voicepath_ph")),
   };
@@ -431,7 +432,8 @@ export async function openSettings(section, restore = null) {
 
   const saveAll = async (restart) => {
     try {
-      await saveConfig({ speech_exe: f.exe.value.trim(), model_dir: f.modelDir.value.trim(), model: modelSel.value,
+      await saveConfig({ tts_backend: backendSel.value, audio_exe: f.audioExe.value.trim(), audio_model: f.audioModel.value.trim(),
+        speech_exe: f.exe.value.trim(), model_dir: f.modelDir.value.trim(), model: modelSel.value,
         speak_language: speakSel.value || "auto", tts_voice: ttsVoiceSel.value,
         device: deviceSel.value, output_dir: f.out.value.trim(), voices_dir: f.voicesDir.value.trim(), llm: llmPatch(), web_search: web.checked,
         default_how: defaultHow.value.trim(),
@@ -472,6 +474,13 @@ export async function openSettings(section, restore = null) {
   const keep = h("input", { type: "checkbox" });
   keep.checked = Boolean(c.keep_all);
   keep.addEventListener("change", () => saveConfig({ keep_all: keep.checked }).catch((e) => toast(e.message, { kind: "err" })));
+  // 声を作るエンジン: speech.cpp か audio.cpp。選んだ方の欄だけ出す
+  const backendSel = h("select", { class: "field-input", "aria-label": t("set.backend") },
+    h("option", { value: "speech" }, "speech.cpp"), h("option", { value: "audio" }, "audio.cpp"));
+  backendSel.value = c.tts_backend === "audio" ? "audio" : "speech";
+  const paintBackend = () => { for (const el of drawer.querySelectorAll("[data-backend]")) el.classList.toggle("hidden", el.dataset.backend !== backendSel.value); };
+  backendSel.addEventListener("change", () => { paintBackend(); ttsDirty(); });
+  setTimeout(paintBackend);
   const asr = h("input", { type: "checkbox" });
   asr.checked = Boolean(c.asr_check);
   asr.addEventListener("change", () => saveConfig({ asr_check: asr.checked }).catch((e) => toast(e.message, { kind: "err" })));
@@ -558,8 +567,11 @@ export async function openSettings(section, restore = null) {
         } }, iconEl("folder-open"), t("set.import")))),
       // 3. 音声モデル
       h("section", { class: "set-group" }, h("h3", {}, t("set.speech")),
-        row(t("set.exe"), f.exe), row(t("set.model_dir"), f.modelDir), row(t("set.model_name"), modelSel),
-        h("span", { class: "help" }, t("set.model_help")),
+        row(t("set.backend"), backendSel),
+        ...[row(t("set.exe"), f.exe), row(t("set.model_dir"), f.modelDir), row(t("set.model_name"), modelSel),
+          h("span", { class: "help" }, t("set.model_help"))].map((el) => { el.dataset.backend = "speech"; return el; }),
+        ...[row(t("set.audio_exe"), f.audioExe), row(t("set.audio_model"), f.audioModel),
+          h("span", { class: "help" }, t("set.audio_help"))].map((el) => { el.dataset.backend = "audio"; return el; }),
         row(t("set.speak_language"), speakSel), ttsVoiceRow, row(t("set.device"), deviceSel),
         h("label", { class: "switch" }, asr, h("span", { class: "sw" }), t("set.asr")),
         h("span", { class: "help" }, t("set.asr_help")),

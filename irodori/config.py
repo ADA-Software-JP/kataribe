@@ -68,8 +68,16 @@ def _find_speech():
     return str(path) if path and path.is_file() else ""
 
 
+def find_audio():
+    """audio.cpp のサーバー(audiocpp_server)。PATH にあればそれ。見つからなければ空。"""
+    return shutil.which("audiocpp_server") or ""
+
+
 def _defaults():
     return {
+        "tts_backend": "speech",   # 声を作るエンジン: speech(speech.cpp)か audio(audio.cpp)
+        "audio_exe": find_audio(),   # audio.cpp の audiocpp_server
+        "audio_model": "",           # audio.cpp で読む Irodori-TTS の GGUF(例: irodori-tts-v4.1-anime-q8_0.gguf)
         "speech_exe": _find_speech(),
         "model_dir": "",   # 空なら speech.cpp の既定の保存先
         "model": "irodori-tts-mf",

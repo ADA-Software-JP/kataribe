@@ -236,7 +236,7 @@ class Live:
         """途中の一言に添える、聞き手が実際に聞いた所。(今鳴っている文, 聞き終えた直近の文, 聞かれずに捨てた文)。"""
         lines = list(self.lines.values())
         playing = next((ln["text"] for ln in lines if ln["state"] == "playing"), "")
-        done = [ln["text"] for ln in lines if ln["state"] == "played"][-HEARD_LINES:]
+        done = [ln["text"] + ("…(cut off here)" if ln.get("cut") else "") for ln in lines if ln["state"] == "played"][-HEARD_LINES:]
         last = max((i for i, ln in enumerate(lines) if ln["state"] in ("played", "playing")), default=-1)
         dropped = [ln["text"] for ln in lines[last + 1:] if ln["state"] == "dropped"]
         return playing, "".join(done), "".join(dropped)
@@ -324,7 +324,7 @@ class Live:
         if self._retry and self.agent["error"]:
             self.retry()
 
-    def mark_played(self, line_id, done, failed=False):
+    def mark_played(self, line_id, done, failed=False, cut=False):
         with self.cv:
             ln = self.lines.get(line_id)
             if not ln or ln["state"] == "dropped":
@@ -352,7 +352,12 @@ class Live:
                 self.steer, self._steer_line = "", None
             ln["state"] = "played" if done else "playing"
             ln["ended_at" if done else "started_at"] = round(time.time(), 3)
-            if done:
+            if done and cut:
+                # 返事に替えるために途中で切った: 聞いたのは途中まで。全文の音声は残さない
+                ln["cut"] = True
+                self._trim_played()
+                self._save_history()
+            elif done:
                 # 「鳴った音声を全部残す」は、鳴り終えた時に残す(先読みしただけで捨てた音声は残さない)
                 path = self.wav_path(line_id)
                 if self.config.get()["keep_all"] and path and not ln["stem"]:
@@ -382,7 +387,7 @@ class Live:
     # --- 履歴 ---------------------------------------------------------------------------------------------------
     def _save_history(self):
         """今の会話を履歴に書く(cv を持って呼ぶ)。鳴り終えた行と、依頼・途中の一言だけを残す。"""
-        kept = [{k: e.get(k) for k in ("kind", "text", "how", "feel", "speed", "pause", "starred", "stem", "out", "at")}
+        kept = [{k: e.get(k) for k in ("kind", "text", "how", "feel", "speed", "pause", "starred", "stem", "out", "at", "cut")}
                 for e in self.log if e["kind"] == "user" or (e["kind"] == "line" and e["state"] == "played")]
         if not kept:
             return
@@ -767,6 +772,9 @@ class Live:
         playing = next((ln for ln in self.lines.values() if ln["state"] == "playing"), None)
         if not playing:
             return 0.0
+        # 途中の一言への返事(その最初の行)は、今の声の終わりを待たずにすぐ作る。できたら画面が今の声を切って差し替える
+        if next(ln for ln in self.log if ln["kind"] == "line" and ln["state"] == "queued")["from"]:
+            return 0.0
         left = playing.get("started_at", 0) + playing["audio_seconds"] - time.time()
         opt = self._opt()
         return max(0.0, left - max(opt["lead_min"], opt["lead_factor"] * self._last_gen))
@@ -782,6 +790,8 @@ class Live:
         # 響き(エコー)が乗るのは Irodori-TTS の癖。ほかのモデルの声は、響きでは作り直さない
         check = opt["reverb_check"] and self.engine.model.get("architecture", "irodori-tts") == "irodori-tts"
         limit = opt["reverb_max_redo"] if payload["voice"] == "none" else min(2, opt["reverb_max_redo"])
+        if line["from"] and payload["voice"] != "none":
+            limit = 0   # 途中の一言への返事は、作り直さずにすぐ鳴らす(待たせない)
         tries, best = 0, None   # 残響で作り直した回数と、ここまででいちばん響きの少なかったもの
         while True:
             try:

@@ -1,7 +1,7 @@
 import { needsLogin } from "./login.js";
 import { initComposer, insertNewline, micCancel, micCommit, micRecording, micStart, submit, syncInput } from "./composer.js";
 import { askRestart, initControls, openVoicePick, renderControls as renderButtons } from "./controls.js";
-import { hydrate } from "./icons.js";
+import { hydrate, iconEl } from "./icons.js";
 import { applyStatic, loadDicts, setLang, t } from "./i18n.js";
 import { addEntry, applySnapshot, applyStatus, clearLog, dropLines, hasContent, patchLine } from "./live.js";
 import { initAudio, onDrop, onReset, pump, release, setRunning, settle, unlock } from "./player.js";
@@ -99,6 +99,15 @@ function initHeader() {
     else if (S.engine.state === "stopped") await api("POST", "/api/engine/start", {});
   });
   $("#takeBtn").addEventListener("click", claim);
+  // 明るさをワンクリックで切り替える(設定の「テーマ」と同じ値を書く)。押すと替わる先のアイコンを出す
+  const paintTheme = () => $("#themeBtn").replaceChildren(iconEl(document.documentElement.dataset.theme === "light" ? "moon" : "sun"));
+  $("#themeBtn").addEventListener("click", () => {
+    const next = document.documentElement.dataset.theme === "light" ? "dark" : "light";
+    try { localStorage.setItem("irodori.theme", next); } catch { /* 保存できなくても動く */ }
+    applyTheme(next);
+  });
+  on("theme", paintTheme);
+  paintTheme();
 }
 
 /** 声を鳴らす担当は 1 タブだけ。譲る時は鳴りかけの声を止め、受ける時は(押した操作のうちに)鳴らし始める。 */

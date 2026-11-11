@@ -25,6 +25,7 @@ README に書いていない使い方をまとめています。
 右上の歯車から開きます。
 
 - 音声合成のモデル: speech.cpp で使えるモデルから選びます。読み上げる言語もここで選べます。
+- 声を作るエンジン: speech.cpp のほかに [audio.cpp](https://github.com/0xShug0/audio.cpp) も選べます。audio.cpp では、`audiocpp_server` の実行ファイルと Irodori-TTS の GGUF（Anime 版など）の場所を入れます。
 - LLM: Claude Code、Codex、LM Studio から選び、「接続テスト」で確かめます。Claude Code と Codex にログインしていないときは、画面に「ログイン」が出ます。
 - 文章の書き方: LLM に渡す指示を書き換えられます。「既定に戻す」で元に戻せます。
 

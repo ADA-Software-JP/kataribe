@@ -5,13 +5,20 @@ import json
 import os
 import queue
 import re
+import io
+import random
+import socket
 import subprocess
 import sys
+import tempfile
 import threading
 import time
+import urllib.error
+import urllib.request
+import wave
 from pathlib import Path
 
-from .config import IS_WINDOWS, find_speech, official_speech
+from .config import IS_MAC, IS_WINDOWS, ROOT, find_audio, find_speech, official_speech
 from .i18n import t
 
 CREATE_NO_WINDOW = 0x08000000
@@ -73,6 +80,7 @@ class Request:
     def __init__(self, rid, tag):
         self.id, self.tag = rid, tag
         self.q = queue.Queue()
+        self.cancelled = False
 
 
 # Kataribe が話せる speech worker の protocol(speech.cpp の docs/worker.md)。3 は v0.9 系、4 は v0.10 系
@@ -91,6 +99,8 @@ class Engine:
         self.sample_rate = 48000
         self.model = {}   # 読み込んだモデルの中身(ready の model): 話せる言語、内蔵の声、受け付ける設定
         self.proc = None
+        self.kind = "speech"   # いま動かしているエンジン: "speech"(speech.cpp の worker)か "audio"(audio.cpp のサーバー)
+        self._port = 0
         self._boot_id = 0
         self._ids = 0
         self._added = {}
@@ -141,8 +151,10 @@ class Engine:
         if folder.is_dir():
             for f in sorted(folder.glob("*.wav")):
                 found[f.stem] = f
-            for f in sorted(folder.glob("*.voice.gguf")):
-                found[f.name[: -len(".voice.gguf")]] = f
+            # 声ファイル(*.voice.gguf)は speech.cpp だけが読める。audio.cpp では WAV を参照の声として渡す
+            if self.kind != "audio":
+                for f in sorted(folder.glob("*.voice.gguf")):
+                    found[f.name[: -len(".voice.gguf")]] = f
         return found
 
     def start(self):
@@ -150,6 +162,9 @@ class Engine:
             if self.proc and self.proc.poll() is None:
                 return
             cfg = self.config.get()
+            self.kind = "audio" if cfg["tts_backend"] == "audio" else "speech"
+            if self.kind == "audio":
+                return self._start_audio(cfg)
             exe = Path(cfg["speech_exe"]).expanduser() if cfg["speech_exe"] else None
             if not cfg["speech_exe"]:
                 # 未設定なら探し直す(起動後に speech.cpp を入れて「再確認」を押した時)。入れたパスは消さない
@@ -205,6 +220,137 @@ class Engine:
             threading.Thread(target=self._read_stderr, args=(proc,), daemon=True).start()
             threading.Thread(target=self._read_stdout, args=(boot_id, proc), daemon=True).start()
             threading.Thread(target=self._watchdog, args=(boot_id,), daemon=True).start()
+
+    # --- audio.cpp(audiocpp_server を子プロセスで常駐させ、HTTP で 1 本ずつ作らせる) -------------------------------
+    def _start_audio(self, cfg):
+        exe = cfg["audio_exe"] or find_audio()
+        if exe and not cfg["audio_exe"]:
+            self.config.update({"audio_exe": exe})
+        exe = Path(exe).expanduser() if exe else None
+        if not exe or not exe.is_file():
+            self._set("error", t("eng.audio_missing", path=cfg["audio_exe"] or t("eng.unset")))
+            return
+        model = Path(cfg["audio_model"]).expanduser() if cfg["audio_model"] else None
+        if model and not model.is_absolute():
+            model = ROOT / model
+        if not model or not model.is_file():
+            self._set("error", t("eng.audio_no_model", path=cfg["audio_model"] or t("eng.unset")))
+            return
+        model = model.resolve()
+        try:
+            self.config.path("voices_dir").mkdir(parents=True, exist_ok=True)
+            with socket.socket() as sock:
+                sock.bind(("127.0.0.1", 0))
+                self._port = sock.getsockname()[1]
+            conf = Path(tempfile.gettempdir()) / f"kataribe-audio-{os.getpid()}.json"
+            conf.write_text(json.dumps({"host": "127.0.0.1", "port": self._port, "lazy_load": False, "max_loaded_models": 1, "models": [
+                {"id": "tts", "family": "irodori_tts", "task": "tts", "mode": "offline", "path": model.as_posix()}]}), encoding="utf-8")
+        except OSError as e:
+            self._set("error", t("eng.start_failed", e=e))
+            return
+        files = self.voice_files()
+        files.update({n: Path(p) for n, p in self._added.items() if Path(p).is_file() and str(p).lower().endswith(".wav")})
+        self._added = {n: str(p) for n, p in files.items()}
+        self.voices = list(files)
+        backend = audio_backend(str(exe))
+        cmd = [str(exe), "--config", str(conf), "--no-ui", "--backend", backend]
+        if str(cfg["device"]).isdigit() and backend != "cpu":
+            cmd += ["--device", str(cfg["device"])]
+        flags = (CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP) if IS_WINDOWS else 0
+        self._tail.clear()
+        try:
+            self.proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+                                         creationflags=flags, start_new_session=not IS_WINDOWS)
+        except OSError as e:
+            self._set("error", t("eng.start_failed", e=e))
+            return
+        self.adopt(self.proc)
+        self._boot_id += 1
+        boot_id, proc = self._boot_id, self.proc
+        self._set("starting")
+        log(f"audio.cpp start backend={backend} voices={len(files)}")
+        threading.Thread(target=self._read_stderr, args=(proc,), daemon=True).start()
+        threading.Thread(target=self._boot_audio, args=(boot_id, proc, model), daemon=True).start()
+        threading.Thread(target=self._watchdog, args=(boot_id,), daemon=True).start()
+
+    def _boot_audio(self, boot_id, proc, model):
+        """サーバーが応えるまで待ち、モデルでできることを決めて、1 本読ませて暖める。"""
+        while proc.poll() is None and boot_id == self._boot_id:
+            try:
+                urllib.request.urlopen(f"http://127.0.0.1:{self._port}/health", timeout=2).read()
+                break
+            except (OSError, urllib.error.URLError):
+                time.sleep(0.3)
+        if boot_id != self._boot_id:
+            return
+        if proc.poll() is not None:
+            self._set("error", t("eng.exited", code=proc.poll(), tail=self._tail_text()))
+            return
+        # Irodori-TTS(日本語)。参照なし("none")でも、WAV を参照の声にしても話せる。話し方(instruct)も受け付ける
+        self.model = {"name": model.stem, "architecture": "irodori-tts", "languages": ["ja"], "sample_rate": 48000, "voices": [],
+                      "voice_files": True, "meanflow": "-mf" in model.stem.lower(),
+                      "options": [{"name": "voice", "choices": ["none"]}] + [{"name": n} for n in ("steps", "seed", "instructions", "speed", "language", "keep_tail")]}
+        self.sample_rate = 48000
+        threading.Thread(target=self._warm, args=(boot_id,), daemon=True).start()
+        proc.wait()
+        if boot_id == self._boot_id and self.state != "error":
+            self._set("error", t("eng.exited", code=proc.poll(), tail=self._tail_text()))
+
+    def _audio_request(self, fields, out):
+        """1 本を作らせる(別スレッドで動く)。結果は out に入れる: {"pcm", "end"} か {"error"}。"""
+        voice = fields.get("voice") or "none"
+        options = {"seed": int(fields["seed"]) if fields.get("seed") is not None else random.randrange(2**31)}
+        body = {"model": "tts", "input": fields["text"], "options": options}
+        try:
+            if voice == "none":
+                options["no_ref"] = True
+            else:
+                body["voice_ref"] = Path(self._added[voice]).as_posix()
+            if fields.get("instructions"):
+                options["instruct"] = fields["instructions"]
+            if fields.get("steps") and self.model.get("meanflow"):
+                options["num_inference_steps"] = int(fields["steps"])   # 段数の設定は MeanFlow 版のもの。ほかはモデルの既定に任せる
+            if fields.get("speed") and float(fields["speed"]) != 1.0:
+                options["duration_scale"] = round(1.0 / float(fields["speed"]), 3)
+            req = urllib.request.Request(f"http://127.0.0.1:{self._port}/v1/audio/speech", json.dumps(body).encode("utf-8"),
+                                         {"Content-Type": "application/json"})
+            with wave.open(io.BytesIO(urllib.request.urlopen(req, timeout=300).read())) as w:
+                pcm = w.readframes(w.getnframes())
+            out.update(pcm=pcm, end={"seed": options["seed"], "stop": "complete", "samples": len(pcm) // 2})
+        except urllib.error.HTTPError as e:
+            try:
+                message = json.loads(e.read())["error"]["message"]
+            except (ValueError, KeyError, TypeError):
+                message = str(e)
+            out["error"] = message
+        except (OSError, wave.Error, EOFError, KeyError) as e:
+            out["error"] = str(e) or t("eng.error")
+
+    def _call_audio(self, kind, fields, tag):
+        if kind == "add_voice":
+            if not str(fields["path"]).lower().endswith(".wav") or not Path(fields["path"]).is_file():
+                raise EngineError(t("eng.audio_wav_only"))
+            return b"", {}
+        with self._synth_lock:
+            req = Request("", tag)
+            self._current = req
+            out = {}
+            worker = threading.Thread(target=self._audio_request, args=(fields, out), daemon=True)
+            boot_id = self._boot_id
+            worker.start()
+            try:
+                while worker.is_alive():
+                    worker.join(0.05)
+                    # サーバーは作り始めた 1 本を止められない。待つのをやめて捨てる(次の 1 本はサーバー側で順番を待つ)
+                    if req.cancelled:
+                        raise Cancelled(t("eng.cancelled"))
+                    if boot_id != self._boot_id:
+                        raise EngineError(self.error or t("eng.ended"))
+                if "error" in out:
+                    raise EngineError(out["error"])
+                return out["pcm"], out["end"]
+            finally:
+                self._current = None
 
     def _read_stderr(self, proc):
         for raw in iter(proc.stderr.readline, b""):
@@ -301,7 +447,8 @@ class Engine:
             proc, self.proc = self.proc, None
         if proc and proc.poll() is None:
             try:
-                proc.stdin.close()
+                if proc.stdin:
+                    proc.stdin.close()
             except OSError:
                 pass
             proc.terminate()
@@ -309,6 +456,10 @@ class Engine:
                 proc.wait(5)
             except subprocess.TimeoutExpired:
                 proc.kill()
+        try:
+            (Path(tempfile.gettempdir()) / f"kataribe-audio-{os.getpid()}.json").unlink()   # audio.cpp に渡した一時の設定
+        except OSError:
+            pass
         for req in list(self._pending.values()):
             req.q.put({"type": "eof"})
         if self.state != "stopped":
@@ -343,6 +494,8 @@ class Engine:
 
     def _call(self, kind, fields, tag=None, timeout=120):
         """1 つの要求を送り、終端メッセージまで待つ。(PCM, end メッセージ) を返す。要求は 1 本ずつ直列に流す。"""
+        if self.kind == "audio":
+            return self._call_audio(kind, fields, tag)
         with self._synth_lock:
             self._ids += 1
             req = Request(f"r{self._ids}", tag)
@@ -375,6 +528,9 @@ class Engine:
         """tag の要求が実行中なら中断を頼む(別の要求には触れない)。"""
         req = self._current
         if req and req.tag == tag:
+            req.cancelled = True
+            if self.kind == "audio":
+                return
             try:
                 self._write({"type": "cancel", "id": req.id})
             except EngineError:
@@ -408,7 +564,32 @@ class Engine:
         self.bus.emit("engine", self.snapshot())
 
 
-def list_devices(speech_exe):
+def _audio_devices(audio_exe):
+    """audio.cpp が使えるデバイス(--list-devices --json)。読めなければ空。"""
+    try:
+        out = subprocess.run([audio_exe, "--list-devices", "--json"], capture_output=True, timeout=30,
+                             creationflags=CREATE_NO_WINDOW if IS_WINDOWS else 0).stdout.decode("utf-8", "replace")
+        return json.loads(out[out.index("{"):])["devices"]
+    except (OSError, subprocess.SubprocessError, ValueError, KeyError):
+        return []
+
+
+def audio_backend(audio_exe):
+    """その audio.cpp で使うバックエンド。GPU があればそのバックエンド(CUDA 版なら cuda、Vulkan 版なら vulkan)、無ければ cpu。
+    一覧を読めない古い版は、これまでどおり Mac は metal、ほかは vulkan。"""
+    found = _audio_devices(audio_exe)
+    if not found:
+        return "metal" if IS_MAC else "vulkan"
+    gpu = next((d for d in found if d.get("type") == "gpu" and d.get("backend")), None)
+    return gpu["backend"] if gpu else "cpu"
+
+
+def list_devices(speech_exe, audio_exe=""):
+    if audio_exe:
+        # audio.cpp: 番号で選ぶ(使うバックエンドの GPU だけ出す)
+        backend = audio_backend(audio_exe)
+        return [{"name": str(d["index"]), "kind": "gpu", "info": d.get("description", "")}
+                for d in _audio_devices(audio_exe) if d.get("type") == "gpu" and d.get("backend") == backend]
     if not speech_exe or not Path(speech_exe).is_file():
         return []
     try:

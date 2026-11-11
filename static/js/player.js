@@ -10,6 +10,7 @@ let current = null;
 let next = null;
 let last = null;
 let timer = 0;
+const FADE = 0.06;          // 声を切る時のフェード(秒)
 const loaded = new Map();
 const failed = new Map();   // 行 id -> 読み込みに失敗した回数
 
@@ -111,13 +112,29 @@ function ensureLoaded(line) {
     });
 }
 
-function schedule(line, at) {
-  const { buf, env } = loaded.get(line.id);
+/** buf を at から鳴らす。切る時にフェードできるよう、1 本ごとに音量の節を持つ。 */
+function play(buf, at) {
+  const gain = ctx.createGain();
+  gain.connect(master);
   const src = ctx.createBufferSource();
   src.buffer = buf;
-  src.connect(master);
+  src.connect(gain);
   src.start(at);
-  next = { id: line.id, src, startAt: at, endAt: at + buf.duration, buf, env, line };
+  return { src, gain };
+}
+
+/** 鳴っている 1 本を at までにフェードして止める。 */
+function fadeOut(item, at) {
+  const from = Math.max(ctx.currentTime, at - FADE);
+  item.gain.gain.cancelScheduledValues(from);
+  item.gain.gain.setValueAtTime(item.gain.gain.value, from);
+  item.gain.gain.linearRampToValueAtTime(0, at);
+  try { item.src.stop(at + 0.01); } catch { /* 終了済み */ }
+}
+
+function schedule(line, at) {
+  const { buf, env } = loaded.get(line.id);
+  next = { id: line.id, ...play(buf, at), startAt: at, endAt: at + buf.duration, buf, env, line };
   arm();
 }
 
@@ -129,13 +146,22 @@ export function pump() {
   const first = ready[0];
   if (!first || !loaded.get(first.id)?.buf) return;
   const now = ctx.currentTime;
+  if (first.from && current && now < current.endAt - 0.15) {
+    // 途中の一言への返事ができた: 今の声を言い終わるまで待たず、すぐ切って差し替える
+    const at = now + FADE + 0.02;
+    fadeOut(current, at - 0.02);
+    current.endAt = at - 0.02;
+    current.cut = true;
+    schedule(first, at);
+    return;
+  }
   const base = current || last;
   schedule(first, base ? Math.max(base.endAt + (base.line.pause ?? 0), now + 0.02) : now + 0.04);
 }
 
 function finish(item) {
   item.line.state = "played";
-  api("POST", "/api/live/played", { id: item.id, done: true }).catch(() => {});
+  api("POST", "/api/live/played", { id: item.id, done: true, cut: Boolean(item.cut) }).catch(() => {});
   emit("player-end", item.line);
   for (const id of [...loaded.keys()]) {
     const l = byId(id);

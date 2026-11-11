@@ -171,7 +171,7 @@ def api_live_send(body):
 
 
 def api_live_played(body):
-    return {"ok": live.mark_played(need(body, "id"), bool(body.get("done")), bool(body.get("failed")))}
+    return {"ok": live.mark_played(need(body, "id"), bool(body.get("done")), bool(body.get("failed")), bool(body.get("cut")))}
 
 
 def api_player_claim(body):
@@ -293,7 +293,7 @@ ROUTES = [
     ("GET", r"/api/state", lambda b: full_state()),
     ("GET", r"/api/config", lambda b: config.get()),
     ("PUT", r"/api/config", api_config_put),
-    ("GET", r"/api/devices", lambda b: {"devices": list_devices(config.get()["speech_exe"])}),
+    ("GET", r"/api/devices", lambda b: {"devices": list_devices(config.get()["speech_exe"], config.get()["audio_exe"] if config.get()["tts_backend"] == "audio" else "")}),
     ("POST", r"/api/prompts/reset", api_prompts_reset),
     ("POST", r"/api/open", api_open_folder),
     ("GET", r"/api/tts/models", api_tts_models),

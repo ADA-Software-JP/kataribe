@@ -41,10 +41,11 @@ DEFAULTS = {
     "steer": (
         "The user's remark: {text}\n"
         "Heard so far: \"{heard}\"\n"
-        "Now playing (it will play to the end): \"{now_playing}\"\n"
+        "Now playing (it is cut off the moment your first line is ready): \"{now_playing}\"\n"
         "Thrown away, not heard: \"{dropped}\"\n"
         "The remark comes before everything earlier. If it asks to stop something, stop it from the next line. If it asks you something, answer it first.\n"
-        "Write {lines} lines, JSON only, continuing after the line now playing."
+        "Begin your first line with a brief, natural acknowledgement of the remark (an aizuchi such as a listener gives), then go straight on. Keep that first line short.\n"
+        "Write {lines} lines, JSON only."
     ),
     # 切り替えた直後の新しいセッションの、最初の依頼の前に付ける。中身が空の行は省く
     "handover": (
