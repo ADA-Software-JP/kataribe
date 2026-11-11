@@ -2,7 +2,7 @@
 
 [日本語](README.md) | [English](README.en.md) | [简体中文](README.zh-Hans.md) | 繁體中文
 
-[![觀看示範影片](docs/images/demo.webp)](https://pub-9c00ef22e6f04ed2b28141d644eb0cca.r2.dev/kataribe/videos/20261103/demo-59775f93f10d.mp4)
+https://github.com/user-attachments/assets/91afa4d4-78fe-4e27-a7ec-b2127bd59329
 
 <br>
 <br>
