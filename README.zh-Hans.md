@@ -25,7 +25,7 @@ https://github.com/user-attachments/assets/91afa4d4-78fe-4e27-a7ec-b2127bd59329
 ## 关于语音模型和声音
 
 生成声音的模型可以在设置中切换。
-语音由 [speech.cpp](https://github.com/nyosegawa/speech.cpp) 生成，默认模型为 [Irodori-TTS](https://huggingface.co/Aratako/Irodori-TTS-500M)。
+语音由 [speech.cpp](https://github.com/nyosegawa/speech.cpp) 生成，默认模型为 [Irodori-TTS](https://huggingface.co/Aratako/Irodori-TTS-500M)。在非日语环境中，会先选择支持英语、中文等 10 种语言的 Qwen3-TTS。
 
 - **Irodori-TTS**：日语。默认模型。用文字描述就能创建声音并保存。
 - **Qwen3-TTS**：10 种语言（含英语、中文、日语、韩语）。从 aiden、ryan、serena 等 9 种内置声音中选择。“慢一点”“低沉平静”等说话方式的指示会生效。
@@ -63,7 +63,7 @@ python server.py
 
 ### 2. 首次设置
 
-首次启动时会显示设置界面。执行后，会自动下载语音合成引擎 `speech.cpp` 和默认语音模型（约 1.9GB）。
+首次启动时会显示设置界面。执行后，会自动下载语音合成引擎 `speech.cpp` 和默认语音模型（日语约 1.9GB，其他语言约 1.2GB）。
 
 ### 3. 打包成应用（可选）
 

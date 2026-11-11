@@ -10,7 +10,10 @@ const INSTALL_CMD = {
   mac: { shell: "terminal", cmd: "curl -fsSL https://raw.githubusercontent.com/nyosegawa/speech.cpp/main/install.sh | sh" },
   linux: { shell: "terminal", cmd: "curl -fsSL https://raw.githubusercontent.com/nyosegawa/speech.cpp/main/install.sh | sh" },
 };
-const PULL_CMD = "speech pull irodori-tts-mf";
+const pullCmd = () => `speech pull ${S.config.model || "irodori-tts-mf"}`;
+// 最初に入るモデルの大きさ(GB)。日本語は Irodori-TTS、ほかの言語は Qwen3-TTS
+const MODEL_GB = { "irodori-tts-mf": "1.9", "qwen3-tts-0.6b": "1.2" };
+const modelGb = () => MODEL_GB[S.config.model] || "1–2";
 
 const CHOICES = [
   { id: "claude", name: "Claude Code",
@@ -83,7 +86,7 @@ function speechCard() {
   const retry = h("button", { class: "btn small", onclick: () => recheck(retry) }, t("setup.retry"));
   return h("div", { class: "setup" },
     h("h2", {}, t(noModel ? "setup.model_title" : "setup.speech_title")),
-    autoRow(t(noModel ? "setup.model_lead" : "setup.speech_lead")),
+    autoRow(t(noModel ? "setup.model_lead" : "setup.speech_lead", { gb: modelGb() })),
     h("details", { class: "setup-manual" },
       h("summary", {}, t("setup.manual")),
       noModel ? null : h("div", { class: "setup-row" },
@@ -94,7 +97,7 @@ function speechCard() {
       h("div", { class: "setup-row" },
         h("div", { class: "setup-text" },
           h("div", { class: "setup-name" }, t(noModel ? "setup.step_model" : "setup.step2")),
-          command(PULL_CMD))),
+          command(pullCmd()))),
       h("div", { class: "setup-row" },
         h("div", { class: "setup-text" },
           h("div", { class: "setup-step" }, t("setup.elsewhere"))),

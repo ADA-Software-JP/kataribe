@@ -25,7 +25,7 @@ News explainers, bedtime stories, background chatter while you work. Ask for it 
 ## Voice models and voices
 
 Switch the model that generates the voice in the settings.
-Voices are generated with [speech.cpp](https://github.com/nyosegawa/speech.cpp). The default model is [Irodori-TTS](https://huggingface.co/Aratako/Irodori-TTS-500M).
+Voices are generated with [speech.cpp](https://github.com/nyosegawa/speech.cpp). The default model is [Irodori-TTS](https://huggingface.co/Aratako/Irodori-TTS-500M). On a non-Japanese system, Qwen3-TTS, which speaks 10 languages including English and Chinese, is chosen first.
 
 - **Irodori-TTS**: Japanese. The default model. Create a voice from a written description and save it.
 - **Qwen3-TTS**: 10 languages, including English, Chinese, Japanese and Korean. Choose from 9 built-in voices such as aiden, ryan and serena. Directions like “slowly” or “low and calm” are applied.
@@ -63,7 +63,7 @@ python server.py
 
 ### 2. First-time setup
 
-The setup screen appears on first launch. Run it, and the `speech.cpp` speech engine and the default voice model (about 1.9 GB) are downloaded automatically.
+The setup screen appears on first launch. Run it, and the `speech.cpp` speech engine and the default voice model (about 1.9 GB for Japanese, about 1.2 GB for other languages) are downloaded automatically.
 
 ### 3. Build an app (optional)
 

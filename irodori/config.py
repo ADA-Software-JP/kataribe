@@ -14,8 +14,16 @@ FROZEN = getattr(sys, "frozen", False)
 # BUNDLE は同梱物(static/)の場所、ROOT は設定・声・出力を置く場所。
 # Windows の exe では ROOT を exe の隣にする。Mac の .app は中に書かず、ユーザーの Application Support に置く。
 BUNDLE = Path(getattr(sys, "_MEIPASS", "")) if FROZEN else Path(__file__).resolve().parent.parent
+# Microsoft Store 版(別のビルド、Kataribe-store.spec)は、声を作る speech.cpp と audio.cpp を同梱する(あとから実行ファイルを落とさない)。
+# Store のアプリは自分のフォルダーに書けないので、設定・声・出力はユーザーの AppData に置く。
+BUNDLED_SPEECH = BUNDLE / "engine" / "speech" / "speech.exe"
+BUNDLED_AUDIO = BUNDLE / "engine" / "audio" / "audiocpp_server.exe"
+STORE = FROZEN and IS_WINDOWS and BUNDLED_SPEECH.is_file()
 if FROZEN and IS_MAC:
     ROOT = Path.home() / "Library" / "Application Support" / "Kataribe"
+    ROOT.mkdir(parents=True, exist_ok=True)
+elif STORE:
+    ROOT = Path(os.environ.get("LOCALAPPDATA") or Path.home() / "AppData" / "Local") / "Kataribe"
     ROOT.mkdir(parents=True, exist_ok=True)
 else:
     ROOT = Path(sys.executable).resolve().parent if FROZEN else BUNDLE
@@ -47,6 +55,8 @@ PROMPT_KEYS = ("style", "format", "ready", "request", "steer", "handover", "sear
 
 def official_speech():
     """公式のインストーラーが置く speech の場所。無ければ空。"""
+    if STORE:
+        return str(BUNDLED_SPEECH)
     if IS_WINDOWS:
         base = os.environ.get("LOCALAPPDATA")
         path = Path(base) / "Programs" / "speech.cpp" / "current" / "speech.exe" if base else None
@@ -57,6 +67,8 @@ def official_speech():
 
 def _find_speech():
     """speech.cpp の実行ファイル。PATH にあればそれ、なければ公式のインストーラーが置く場所。見つからなければ空。"""
+    if STORE:
+        return str(BUNDLED_SPEECH)
     found = shutil.which("speech")
     if found:
         return found
@@ -69,18 +81,25 @@ def _find_speech():
 
 
 def find_audio():
-    """audio.cpp のサーバー(audiocpp_server)。PATH にあればそれ。見つからなければ空。"""
+    """audio.cpp のサーバー(audiocpp_server)。Store 版は同梱のもの。ほかは PATH にあればそれ。見つからなければ空。"""
+    if STORE:
+        return str(BUNDLED_AUDIO) if BUNDLED_AUDIO.is_file() else ""
     return shutil.which("audiocpp_server") or ""
+
+
+def default_model():
+    """最初に選ぶ声のモデル。日本語の環境は Irodori-TTS(日本語専用)、ほかの言語は Qwen3-TTS(英語・中国語など 10 言語)。"""
+    return "irodori-tts-mf" if i18n.detect() == "ja" else "qwen3-tts-0.6b"
 
 
 def _defaults():
     return {
-        "tts_backend": "speech",   # 声を作るエンジン: speech(speech.cpp)か audio(audio.cpp)
+        "tts_backend": "speech",   # 声を作るエンジン: speech(speech.cpp)か audio(audio.cpp、Irodori-TTS の Anime 版などを使う時に選ぶ)
         "audio_exe": find_audio(),   # audio.cpp の audiocpp_server
         "audio_model": "",           # audio.cpp で読む Irodori-TTS の GGUF(例: irodori-tts-v4.1-anime-q8_0.gguf)
         "speech_exe": _find_speech(),
         "model_dir": "",   # 空なら speech.cpp の既定の保存先
-        "model": "irodori-tts-mf",
+        "model": default_model(),
         # 相対パスは ROOT から見る(フォルダーごと移動しても、隣の outputs/ と voices/ を指したままにする)
         "output_dir": "outputs",
         "voices_dir": "voices",
@@ -237,7 +256,11 @@ class Config:
 
     def get(self):
         with self._lock:
-            return copy.deepcopy(self._data)
+            data = copy.deepcopy(self._data)
+        if STORE:
+            # Store 版は、いつも同梱の実行ファイルを使う(更新のたびに場所が変わるので、保存した値は使わない)
+            data["speech_exe"], data["audio_exe"] = find_speech(), find_audio()
+        return data
 
     def update(self, patch):
         # 写しに当てて、書き込めてから入れ替える(途中で失敗したら、動いている設定は前のまま)
